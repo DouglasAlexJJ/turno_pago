@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/despesa.dart';
 import '../models/turno.dart'; // Importa o nosso novo modelo
+import '../models/manutencao_item.dart';
 
 class DadosService {
   // Chaves para as listas
@@ -96,5 +97,44 @@ class DadosService {
     final List<Turno> turnos = await getTurnos();
     turnos.add(novoTurno);
     await _salvarListaTurnos(turnos);
+  }
+  static const String _manutencaoKey = 'lista_manutencao';
+
+// Salva a lista inteira de itens de manutenção
+  static Future<void> _salvarListaManutencao(List<ManutencaoItem> itens) async {
+    final prefs = await SharedPreferences.getInstance();
+    final List<Map<String, dynamic>> itensMap = itens.map((i) => i.toMap()).toList();
+    await prefs.setString(_manutencaoKey, json.encode(itensMap));
+  }
+
+// Carrega a lista de itens de manutenção
+  static Future<List<ManutencaoItem>> getManutencaoItens() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? itensJson = prefs.getString(_manutencaoKey);
+    if (itensJson != null) {
+      final List<dynamic> itensMap = json.decode(itensJson);
+      return itensMap.map((map) => ManutencaoItem.fromMap(map)).toList();
+    }
+    return [];
+  }
+
+// Adiciona ou atualiza um item na lista
+  static Future<void> salvarManutencaoItem(ManutencaoItem item) async {
+    final List<ManutencaoItem> itens = await getManutencaoItens();
+    // Verifica se o item já existe para atualizá-lo
+    final index = itens.indexWhere((i) => i.id == item.id);
+    if (index != -1) {
+      itens[index] = item; // Atualiza
+    } else {
+      itens.add(item); // Adiciona
+    }
+    await _salvarListaManutencao(itens);
+  }
+
+// Remove um item da lista
+  static Future<void> removerManutencaoItem(String id) async {
+    final List<ManutencaoItem> itens = await getManutencaoItens();
+    itens.removeWhere((i) => i.id == id);
+    await _salvarListaManutencao(itens);
   }
 }

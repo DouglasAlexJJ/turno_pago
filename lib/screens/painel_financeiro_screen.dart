@@ -1,7 +1,6 @@
 // lib/screens/painel_financeiro_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../models/despesa.dart';
 import '../models/turno.dart';
 import '../services/dados_service.dart';
@@ -61,16 +60,6 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Painel Financeiro'),
-        actions: [
-          // Adiciona um botão para recarregar os dados manualmente
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _calcularTotais,
-          ),
-        ],
-      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(

@@ -5,6 +5,7 @@ import 'package:turno_pago/models/turno.dart';
 import '../services/dados_service.dart';
 import 'despesas_screen.dart';
 import 'turno_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,6 +21,7 @@ class HomeScreenState extends State<HomeScreen> {
   // Variáveis para o resumo do dia
   double ganhosDoDia = 0;
   double totalDespesasDoDia = 0;
+  double _custoProvisionadoTurno = 0.0;
 
   @override
   void initState() {
@@ -28,38 +30,44 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _carregarDados() async {
-    // Carrega todos os turnos e todas as despesas
+    // --- LÓGICA DE CÁLCULO DE PROVISIONAMENTO ---
+    final prefs = await SharedPreferences.getInstance();
+    final itensManutencao = await DadosService.getManutencaoItens();
+    final custoManutencaoPorKm = itensManutencao.fold(0.0, (soma, item) => soma + item.custoPorKm);
+    final valorCarro = prefs.getDouble('carro_valor') ?? 0;
+    final vidaUtilKm = prefs.getInt('carro_vida_util_km') ?? 0;
+    final custoDepreciacaoPorKm = (vidaUtilKm > 0) ? valorCarro / vidaUtilKm : 0.0;
+    final custoTotalPorKm = custoManutencaoPorKm + custoDepreciacaoPorKm;
+
+    // --- LÓGICA DE DADOS DO DIA E DO TURNO ---
     final todosOsTurnos = await DadosService.getTurnos();
     final todasAsDespesas = await DadosService.getDespesas();
-
     final hoje = DateTime.now();
 
-    // Filtra para pegar os dados do dia atual
-    final turnosDeHoje = todosOsTurnos.where((t) {
-      return t.data.year == hoje.year && t.data.month == hoje.month && t.data.day == hoje.day;
-    }).toList();
+    final turnosDeHoje = todosOsTurnos.where((t) =>
+    t.data.year == hoje.year && t.data.month == hoje.month && t.data.day == hoje.day);
+    final despesasDeHoje = todasAsDespesas.where((d) =>
+    d.data.year == hoje.year && d.data.month == hoje.month && d.data.day == hoje.day);
 
-    final despesasDeHoje = todasAsDespesas.where((d) {
-      return d.data.year == hoje.year && d.data.month == hoje.month && d.data.day == hoje.day;
-    }).toList();
-
-    // Calcula os totais do dia
     final double somaGanhos = turnosDeHoje.fold(0.0, (soma, turno) => soma + turno.ganhos);
     final double somaDespesas = despesasDeHoje.fold(0.0, (soma, despesa) => soma + despesa.valor);
+
+    Turno? turnoMaisRecente;
+    if (todosOsTurnos.isNotEmpty) {
+      todosOsTurnos.sort((a, b) => b.data.compareTo(a.data));
+      turnoMaisRecente = todosOsTurnos.first;
+    }
+
+    // Calcula o valor final a ser provisionado com base no último turno
+    final double valorProvisaoFinal = (turnoMaisRecente?.kmRodados ?? 0) * custoTotalPorKm;
 
     if (!mounted) return;
 
     setState(() {
-      // Ordena os turnos por data para pegar o mais recente
-      if (todosOsTurnos.isNotEmpty) {
-        todosOsTurnos.sort((a, b) => b.data.compareTo(a.data));
-        ultimoTurno = todosOsTurnos.first;
-      } else {
-        ultimoTurno = null;
-      }
-
+      ultimoTurno = turnoMaisRecente;
       ganhosDoDia = somaGanhos;
       totalDespesasDoDia = somaDespesas;
+      _custoProvisionadoTurno = valorProvisaoFinal; // Atribuição direta
     });
   }
 
@@ -68,7 +76,6 @@ class HomeScreenState extends State<HomeScreen> {
     final lucroDoDia = ganhosDoDia - totalDespesasDoDia;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Resumo')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: RefreshIndicator(
@@ -102,7 +109,28 @@ class HomeScreenState extends State<HomeScreen> {
                   );
                   _carregarDados();
                 },
-              )
+              ),
+              const SizedBox(height: 16),
+              _buildCard(
+                title: '💰 Cofrinho do Veículo',
+                children: [
+                  const Text(
+                    'Valor a separar do último turno para cobrir custos futuros do veículo:',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 15),
+                  ),
+                  const SizedBox(height: 16),
+                  Center(
+                    child: Text(
+                      'R\$ ${_custoProvisionadoTurno.toStringAsFixed(2)}',
+                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),

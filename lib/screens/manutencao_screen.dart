@@ -1,5 +1,9 @@
+// lib/screens/manutencao_screen.dart
+
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:turno_pago/models/manutencao_item.dart';
+import 'package:turno_pago/screens/add_edit_manutencao_screen.dart';
+import 'package:turno_pago/services/dados_service.dart';
 
 class ManutencaoScreen extends StatefulWidget {
   const ManutencaoScreen({super.key});
@@ -9,83 +13,119 @@ class ManutencaoScreen extends StatefulWidget {
 }
 
 class ManutencaoScreenState extends State<ManutencaoScreen> {
-  final _valorOleoController = TextEditingController();
-  final _valorFiltroController = TextEditingController();
-  final _valorPastilhaController = TextEditingController();
+  List<ManutencaoItem> _itens = [];
+  bool _isLoading = true;
 
-  double _valorPorKmOleo = 0;
-  double _valorPorKmFiltro = 0;
-  double _valorPorKmPastilha = 0;
+  @override
+  void initState() {
+    super.initState();
+    _carregarItens();
+  }
 
-  final int kmTrocaOleo = 8000;
-  final int kmTrocaFiltro = 12000;
-  final int kmTrocaPastilha = 20000;
-
-  Future<void> _salvarDados() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    double valorOleo = double.tryParse(_valorOleoController.text) ?? 0;
-    double valorFiltro = double.tryParse(_valorFiltroController.text) ?? 0;
-    double valorPastilha = double.tryParse(_valorPastilhaController.text) ?? 0;
-
-    await prefs.setDouble('oleo_valor', valorOleo);
-    await prefs.setDouble('filtro_valor', valorFiltro);
-    await prefs.setDouble('pastilha_valor', valorPastilha);
-
-    if (!mounted) return;
-
+  Future<void> _carregarItens() async {
+    setState(() => _isLoading = true);
+    final itens = await DadosService.getManutencaoItens();
     setState(() {
-      _valorPorKmOleo = valorOleo / kmTrocaOleo;
-      _valorPorKmFiltro = valorFiltro / kmTrocaFiltro;
-      _valorPorKmPastilha = valorPastilha / kmTrocaPastilha;
+      _itens = itens;
+      _isLoading = false;
     });
+  }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Dados de manutenção salvos!')),
+  void _navegarParaAddItem() async {
+    final bool? recarregar = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AddEditManutencaoScreen()),
     );
+    if (recarregar == true) {
+      _carregarItens();
+    }
+  }
+
+  void _navegarParaEditItem(ManutencaoItem item) async {
+    final bool? recarregar = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => AddEditManutencaoScreen(item: item)),
+    );
+    if (recarregar == true) {
+      _carregarItens();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    double valorTotalPorKm = _valorPorKmOleo + _valorPorKmFiltro + _valorPorKmPastilha;
+    // Calcula o custo total por KM somando o custo de cada item
+    final double custoTotalPorKm = _itens.fold(0.0, (soma, item) => soma + item.custoPorKm);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Manutenção Detalhada')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: ListView(
-          children: [
-            const Text('🔧 Informe os valores aproximados:'),
-            TextFormField(
-              controller: _valorOleoController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Troca de óleo (R\$)'),
+      appBar: AppBar(
+        title: const Text('Custos de Manutenção'),
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
+        children: [
+          // Card com o resumo
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    const Text(
+                      'Custo Total de Manutenção por KM:',
+                      style: TextStyle(fontSize: 16),
+                      textAlign: TextAlign.center,
+                    ),
+                    Text(
+                      'R\$ ${custoTotalPorKm.toStringAsFixed(3)}',
+                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        color: Colors.amber[800],
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            TextFormField(
-              controller: _valorFiltroController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Troca de filtros (R\$)'),
+          ),
+          // Lista de itens
+          Expanded(
+            child: ListView.builder(
+              itemCount: _itens.length,
+              itemBuilder: (context, index) {
+                final item = _itens[index];
+                return Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: ListTile(
+                    title: Text(item.nome),
+                    subtitle: Text('Custo/KM: R\$ ${item.custoPorKm.toStringAsFixed(3)}'),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit, color: Colors.grey),
+                          onPressed: () => _navegarParaEditItem(item),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.redAccent),
+                          onPressed: () async {
+                            await DadosService.removerManutencaoItem(item.id);
+                            _carregarItens();
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
-            TextFormField(
-              controller: _valorPastilhaController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Troca de pastilhas (R\$)'),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _salvarDados,
-              child: const Text('Salvar Manutenção'),
-            ),
-            const SizedBox(height: 24),
-            const Divider(),
-            const Text('💡 Custo estimado por KM rodado:'),
-            Text('• Óleo: R\$ ${_valorPorKmOleo.toStringAsFixed(3)}'),
-            Text('• Filtros: R\$ ${_valorPorKmFiltro.toStringAsFixed(3)}'),
-            Text('• Pastilhas: R\$ ${_valorPorKmPastilha.toStringAsFixed(3)}'),
-            const SizedBox(height: 10),
-            Text('💰 Total por KM: R\$ ${valorTotalPorKm.toStringAsFixed(3)}'),
-          ],
-        ),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _navegarParaAddItem,
+        child: const Icon(Icons.add),
       ),
     );
   }

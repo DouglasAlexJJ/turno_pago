@@ -1,8 +1,9 @@
 // lib/screens/main_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:turno_pago/screens/config_screen.dart'; // Importa a tela de config
 import 'package:turno_pago/screens/home_screen.dart';
-import 'package:turno_pago/screens/painel_financeiro_screen.dart'; // Vamos criar este arquivo a seguir
+import 'package:turno_pago/screens/painel_financeiro_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -12,12 +13,11 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  int _indiceSelecionado = 0; // 0 para Home, 1 para Painel
+  int _indiceSelecionado = 0;
 
-  // Lista de telas que a barra de navegação irá controlar
   static const List<Widget> _telas = <Widget>[
     HomeScreen(),
-    PainelFinanceiroScreen(), // A nova tela que vamos construir
+    PainelFinanceiroScreen(),
   ];
 
   void _aoTocarNoItem(int index) {
@@ -29,6 +29,21 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // Adicionamos uma AppBar aqui para o botão de Configurações
+      appBar: AppBar(
+        title: Text(_indiceSelecionado == 0 ? 'Resumo do Dia' : 'Painel Financeiro'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ConfigScreen()),
+              );
+            },
+          ),
+        ],
+      ),
       body: Center(
         child: _telas.elementAt(_indiceSelecionado),
       ),
