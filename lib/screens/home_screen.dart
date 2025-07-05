@@ -1,6 +1,9 @@
+// lib/screens/home_screen.dart
+
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:turno_pago/models/turno.dart';
 import '../services/dados_service.dart';
+import 'despesas_screen.dart';
 import 'turno_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -11,14 +14,12 @@ class HomeScreen extends StatefulWidget {
 }
 
 class HomeScreenState extends State<HomeScreen> {
-  double ganhos = 0;
-  double kmRodado = 0;
-  double consumoCarro = 10; // valor padrão
-  double gastoCombustivel = 0;
-  double ganhoPorKm = 0;
-  double ganhoPorCorrida = 0;
-  int qtdCorridas = 0;
-  String plataforma = 'outro';
+  // Variáveis para o resumo do último turno
+  Turno? ultimoTurno;
+
+  // Variáveis para o resumo do dia
+  double ganhosDoDia = 0;
+  double totalDespesasDoDia = 0;
 
   @override
   void initState() {
@@ -27,68 +28,83 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _carregarDados() async {
-    final prefs = await SharedPreferences.getInstance();
+    // Carrega todos os turnos e todas as despesas
+    final todosOsTurnos = await DadosService.getTurnos();
+    final todasAsDespesas = await DadosService.getDespesas();
 
-    final ganhosTurno = await DadosService.lerDouble('ganhos_turno');
-    final km = await DadosService.lerDouble('km_rodado_turno');
-    final tipoApp = await DadosService.lerString('plataforma_turno');
-    final consumo = prefs.getDouble('consumo_urbano') ?? 10;
-    final corridas = await DadosService.lerInt('corridas_turno');
+    final hoje = DateTime.now();
 
-    // Assumindo um valor médio de combustível. Idealmente, viria das configs.
-    const precoCombustivel = 5.50;
+    // Filtra para pegar os dados do dia atual
+    final turnosDeHoje = todosOsTurnos.where((t) {
+      return t.data.year == hoje.year && t.data.month == hoje.month && t.data.day == hoje.day;
+    }).toList();
 
-    // CORREÇÃO APLICADA AQUI: Trocado '0' por '0.0' para garantir o tipo double.
-    final gastoComb = (km > 0 && consumo > 0) ? (km / consumo) * precoCombustivel : 0.0;
-    final ganhoKm = (km > 0) ? ganhosTurno / km : 0.0;
-    final ganhoCorrida = (tipoApp == '99' && corridas > 0) ? ganhosTurno / corridas : 0.0;
+    final despesasDeHoje = todasAsDespesas.where((d) {
+      return d.data.year == hoje.year && d.data.month == hoje.month && d.data.day == hoje.day;
+    }).toList();
+
+    // Calcula os totais do dia
+    final double somaGanhos = turnosDeHoje.fold(0.0, (soma, turno) => soma + turno.ganhos);
+    final double somaDespesas = despesasDeHoje.fold(0.0, (soma, despesa) => soma + despesa.valor);
 
     if (!mounted) return;
 
     setState(() {
-      ganhos = ganhosTurno;
-      kmRodado = km;
-      consumoCarro = consumo;
-      plataforma = tipoApp;
-      qtdCorridas = corridas;
-      gastoCombustivel = gastoComb;
-      ganhoPorKm = ganhoKm;
-      ganhoPorCorrida = ganhoCorrida;
+      // Ordena os turnos por data para pegar o mais recente
+      if (todosOsTurnos.isNotEmpty) {
+        todosOsTurnos.sort((a, b) => b.data.compareTo(a.data));
+        ultimoTurno = todosOsTurnos.first;
+      } else {
+        ultimoTurno = null;
+      }
+
+      ganhosDoDia = somaGanhos;
+      totalDespesasDoDia = somaDespesas;
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final lucroDoDia = ganhosDoDia - totalDespesasDoDia;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Resumo do Último Turno')),
+      appBar: AppBar(title: const Text('Resumo')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: ListView(
-          children: [
-            _buildCard(
-              title: 'Resumo Financeiro',
-              children: [
-                _buildInfoRow('🗂 Plataforma', plataforma == '99' ? '99' : 'Outro App'),
-                _buildInfoRow('💰 Ganhos Brutos', 'R\$ ${ganhos.toStringAsFixed(2)}'),
-                _buildInfoRow('⛽ Gasto Combustível', 'R\$ ${gastoCombustivel.toStringAsFixed(2)}', isNegative: true),
-                const Divider(),
-                _buildInfoRow('✅ Lucro Estimado', 'R\$ ${(ganhos - gastoCombustivel).toStringAsFixed(2)}', isHighlight: true),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _buildCard(
-              title: 'Métricas de Desempenho',
-              children: [
-                _buildInfoRow('🛣 KM Rodados', '${kmRodado.toStringAsFixed(1)} km'),
-                _buildInfoRow('📊 Ganho por KM', 'R\$ ${ganhoPorKm.toStringAsFixed(2)}'),
-                if (plataforma == '99') ...[
+        child: RefreshIndicator(
+          onRefresh: _carregarDados,
+          child: ListView(
+            children: [
+              _buildCard(
+                title: 'Financeiro do Dia',
+                children: [
+                  _buildInfoRow('💰 Ganhos Brutos', 'R\$ ${ganhosDoDia.toStringAsFixed(2)}'),
+                  _buildInfoRow('💸 Despesas Totais', 'R\$ ${totalDespesasDoDia.toStringAsFixed(2)}', isNegative: true),
                   const Divider(),
-                  _buildInfoRow('🚗 Corridas Feitas', '$qtdCorridas'),
-                  _buildInfoRow('📦 Ganho por Corrida', 'R\$ ${ganhoPorCorrida.toStringAsFixed(2)}'),
-                ]
-              ],
-            ),
-          ],
+                  _buildInfoRow('✅ Lucro Líquido', 'R\$ ${lucroDoDia.toStringAsFixed(2)}', isHighlight: true),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _buildCard(
+                title: 'Métricas do Último Turno',
+                children: ultimoTurno != null
+                    ? _buildMetricasTurno(ultimoTurno!)
+                    : [const Text('Nenhum turno registrado ainda.')],
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.receipt_long),
+                label: const Text('Gerenciar Despesas'),
+                onPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const DespesasScreen()),
+                  );
+                  _carregarDados();
+                },
+              )
+            ],
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton(
@@ -97,7 +113,6 @@ class HomeScreenState extends State<HomeScreen> {
             context,
             MaterialPageRoute(builder: (_) => const TurnoScreen()),
           );
-          // Recarrega os dados se a tela de turno indicar que algo foi salvo
           if (result == true) {
             _carregarDados();
           }
@@ -106,6 +121,22 @@ class HomeScreenState extends State<HomeScreen> {
         child: const Icon(Icons.add, size: 32),
       ),
     );
+  }
+
+  // Helper para construir as métricas do turno e evitar repetição de código
+  List<Widget> _buildMetricasTurno(Turno turno) {
+    final ganhoPorKm = turno.kmRodados > 0 ? turno.ganhos / turno.kmRodados : 0.0;
+    final ganhoPorCorrida = turno.plataforma == '99' && turno.corridas > 0 ? turno.ganhos / turno.corridas : 0.0;
+
+    return [
+      _buildInfoRow('🗂 Plataforma', turno.plataforma == '99' ? '99' : 'Outro App'),
+      _buildInfoRow('🛣 KM Rodados', '${turno.kmRodados.toStringAsFixed(1)} km'),
+      _buildInfoRow('📊 Ganho por KM', 'R\$ ${ganhoPorKm.toStringAsFixed(2)}'),
+      if (turno.plataforma == '99') ...[
+        _buildInfoRow('🚗 Corridas Feitas', '${turno.corridas}'),
+        _buildInfoRow('📦 Ganho por Corrida', 'R\$ ${ganhoPorCorrida.toStringAsFixed(2)}'),
+      ]
+    ];
   }
 
   Widget _buildCard({required String title, required List<Widget> children}) {
@@ -126,18 +157,26 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildInfoRow(String label, String value, {bool isHighlight = false, bool isNegative = false}) {
+    Color? textColor;
+    if (isNegative) {
+      textColor = Colors.redAccent;
+    } else if (isHighlight) {
+      final lucro = double.tryParse(value.replaceAll('R\$ ', '')) ?? 0;
+      textColor = lucro >= 0 ? Colors.green : Colors.redAccent;
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(fontSize: 16)),
+          Text(label, style: const TextStyle(fontSize: 16)),
           Text(
             value,
             style: TextStyle(
               fontSize: 16,
               fontWeight: isHighlight ? FontWeight.bold : FontWeight.normal,
-              color: isNegative ? Colors.redAccent : (isHighlight ? Colors.green : null),
+              color: textColor,
             ),
           ),
         ],
