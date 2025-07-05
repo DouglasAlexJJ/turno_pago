@@ -14,21 +14,24 @@ class TurnoScreenState extends State<TurnoScreen> {
   final _ganhosController = TextEditingController();
   final _kmRodadoController = TextEditingController();
   final _corridasController = TextEditingController();
-  final _horasController = TextEditingController();
+  // O _horasController foi removido
 
   Future<void> _salvarTurno() async {
     final ganhos = double.tryParse(_ganhosController.text) ?? 0;
     final km = double.tryParse(_kmRodadoController.text) ?? 0;
     final corridas = int.tryParse(_corridasController.text) ?? 0;
-    final horas = double.tryParse(_horasController.text) ?? 0;
+    // A variável horas foi removida
 
     await DadosService.salvarDouble('ganhos_turno', ganhos);
     await DadosService.salvarDouble('km_rodado_turno', km);
-    await DadosService.salvarDouble('horas_turno', horas);
+    // A linha para salvar 'horas_turno' foi removida
     await DadosService.salvarString('plataforma_turno', _plataformaSelecionada);
 
     if (_plataformaSelecionada == '99') {
       await DadosService.salvarInt('corridas_turno', corridas);
+    } else {
+      // Limpa o valor de corridas se a plataforma não for 99
+      await DadosService.salvarInt('corridas_turno', 0);
     }
 
     if (!mounted) return;
@@ -37,7 +40,7 @@ class TurnoScreenState extends State<TurnoScreen> {
       const SnackBar(content: Text('Turno salvo com sucesso!')),
     );
 
-    Navigator.pop(context); // volta para a HomeScreen
+    Navigator.pop(context, true); // Volta para a HomeScreen e indica que deve recarregar
   }
 
   @override
@@ -45,7 +48,7 @@ class TurnoScreenState extends State<TurnoScreen> {
     _ganhosController.dispose();
     _kmRodadoController.dispose();
     _corridasController.dispose();
-    _horasController.dispose();
+    // O dispose do _horasController foi removido
     super.dispose();
   }
 
@@ -92,11 +95,7 @@ class TurnoScreenState extends State<TurnoScreen> {
                 decoration: const InputDecoration(labelText: 'Quantidade de corridas'),
               ),
             ],
-            TextFormField(
-              controller: _horasController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Horas trabalhadas'),
-            ),
+            // O TextFormField de horas foi removido daqui
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: _salvarTurno,
