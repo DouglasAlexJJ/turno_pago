@@ -55,27 +55,27 @@ class CarroScreenState extends State<CarroScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Plano de Troca (Depreciação)')),
+      appBar: AppBar(title: const Text('Plano de Troca de veículo')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: ListView(
           children: [
             Text(
-              'Informe os dados para calcular o custo de depreciação do seu veículo por quilômetro rodado.',
+              'Informe os dados para calcular o custo que deverá ser guardado por quilômetro rodado.',
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
             TextFormField(
               controller: _valorVeiculoController,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Valor de compra do veículo (R\$)'),
+              decoration: const InputDecoration(labelText: 'Valor estimado do próximo veículo (R\$)'),
               onChanged: (_) => _calcularCustoPorKm(),
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _vidaUtilKmController,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Vida útil total estimada (em KM)'),
+              decoration: const InputDecoration(labelText: 'Próxima troca de veículo em (KM)'),
               onChanged: (_) => _calcularCustoPorKm(),
             ),
             const SizedBox(height: 24),
@@ -89,7 +89,7 @@ class CarroScreenState extends State<CarroScreen> {
             Center(
               child: Column(
                 children: [
-                  const Text('Custo de depreciação por KM:', style: TextStyle(fontSize: 16)),
+                  const Text('Valor a guardar por KM:', style: TextStyle(fontSize: 16)),
                   Text(
                     'R\$ ${_custoPorKm.toStringAsFixed(3)}',
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(

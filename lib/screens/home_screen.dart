@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:turno_pago/models/turno.dart';
+import 'package:turno_pago/utils/app_formatters.dart';
 import '../services/dados_service.dart';
 import 'despesas_screen.dart';
 import 'turno_screen.dart';
@@ -13,10 +14,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class HomeScreenState extends State<HomeScreen> {
-  // Variáveis para o resumo do último turno
   Turno? ultimoTurno;
-
-  // Variáveis para o resumo do dia
   double ganhosDoDia = 0;
   double totalDespesasDoDia = 0;
 
@@ -66,10 +64,10 @@ class HomeScreenState extends State<HomeScreen> {
               _buildCard(
                 title: 'Financeiro do Dia',
                 children: [
-                  _buildInfoRow('💰 Ganhos Brutos (Dia)', 'R\$ ${ganhosDoDia.toStringAsFixed(2)}'),
-                  _buildInfoRow('💸 Despesas (Dia)', 'R\$ ${totalDespesasDoDia.toStringAsFixed(2)}', isNegative: true),
+                  _buildInfoRow('💰 Ganhos Brutos (Dia)', AppFormatters.formatCurrency(ganhosDoDia)),
+                  _buildInfoRow('💸 Despesas (Dia)', AppFormatters.formatCurrency(totalDespesasDoDia), isNegative: true),
                   const Divider(),
-                  _buildInfoRow('✅ Lucro Líquido (Dia)', 'R\$ ${(ganhosDoDia - totalDespesasDoDia).toStringAsFixed(2)}', isHighlight: true),
+                  _buildInfoRow('✅ Lucro Líquido (Dia)', AppFormatters.formatCurrency(ganhosDoDia - totalDespesasDoDia), isHighlight: true),
                 ],
               ),
               const SizedBox(height: 16),
@@ -138,7 +136,7 @@ class HomeScreenState extends State<HomeScreen> {
     final vidaUtilKm = prefs.getInt('carro_vida_util_km') ?? 0;
     final custoDepreciacaoPorKm = (vidaUtilKm > 0) ? valorCarro / vidaUtilKm : 0.0;
 
-    final consumo = prefs.getDouble('veiculo_consumo_medio') ?? 10.0; // Padrão 10km/l
+    final consumo = prefs.getDouble('veiculo_consumo_medio') ?? 10.0;
 
     return {
       'custoProvisionado': custoManutencaoPorKm + custoDepreciacaoPorKm,
@@ -161,12 +159,12 @@ class HomeScreenState extends State<HomeScreen> {
     return _buildCard(
       title: 'Análise do Último Turno',
       children: [
-        _buildInfoRow('🛣️ KM Rodados', '${turno.kmRodados.toStringAsFixed(1)} km'),
-        _buildInfoRow('💰 Ganhos Brutos', 'R\$ ${turno.ganhos.toStringAsFixed(2)}'),
-        _buildInfoRow('⛽ Gasto Combustível', 'R\$ ${gastoCombustivel.toStringAsFixed(2)}', isNegative: true),
-        _buildInfoRow('🛠️ Custos Futuros', 'R\$ ${custoTotalProvisionado.toStringAsFixed(2)}', isNegative: true),
+        _buildInfoRow('🛣️ KM Rodados', AppFormatters.formatKm(turno.kmRodados)),
+        _buildInfoRow('💰 Ganhos Brutos', AppFormatters.formatCurrency(turno.ganhos)),
+        _buildInfoRow('⛽ Gasto Combustível', AppFormatters.formatCurrency(gastoCombustivel), isNegative: true),
+        _buildInfoRow('🛠️ Custos Futuros', AppFormatters.formatCurrency(custoTotalProvisionado), isNegative: true),
         const Divider(),
-        _buildInfoRow('✅ Lucro Líquido (Turno)', 'R\$ ${lucroLiquidoTurno.toStringAsFixed(2)}', isHighlight: true),
+        _buildInfoRow('✅ Lucro Líquido (Turno)', AppFormatters.formatCurrency(lucroLiquidoTurno), isHighlight: true),
       ],
     );
   }
@@ -174,12 +172,13 @@ class HomeScreenState extends State<HomeScreen> {
   Widget _buildCard({required String title, required List<Widget> children}) {
     return Card(
       elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: Theme.of(context).textTheme.titleLarge),
+            Text(title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             ...children,
           ],
@@ -193,20 +192,22 @@ class HomeScreenState extends State<HomeScreen> {
     if (isNegative) {
       textColor = Colors.redAccent;
     } else if (isHighlight) {
-      final lucro = double.tryParse(value.replaceAll('R\$ ', '')) ?? 0;
-      textColor = lucro >= 0 ? Colors.green : Colors.redAccent;
+      // Remove R$ e formatação para verificar se é negativo
+      final cleanValue = value.replaceAll(RegExp(r'[R$\s.]'), '').replaceAll(',', '.');
+      final lucro = double.tryParse(cleanValue) ?? 0;
+      textColor = lucro >= 0 ? Colors.green.shade700 : Colors.redAccent;
     }
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 16)),
+          Text(label, style: const TextStyle(fontSize: 16, color: Colors.black54)),
           Text(
             value,
             style: TextStyle(
-              fontSize: 16,
-              fontWeight: isHighlight ? FontWeight.bold : FontWeight.normal,
+              fontSize: 17,
+              fontWeight: isHighlight ? FontWeight.bold : FontWeight.w500,
               color: textColor,
             ),
           ),

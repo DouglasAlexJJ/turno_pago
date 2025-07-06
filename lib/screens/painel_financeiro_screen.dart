@@ -1,9 +1,11 @@
 // lib/screens/painel_financeiro_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:turno_pago/utils/app_formatters.dart'; // Importa nosso formatador
 import '../models/despesa.dart';
 import '../models/turno.dart';
 import '../services/dados_service.dart';
+import 'historico_turnos_screen.dart';
 
 class PainelFinanceiroScreen extends StatefulWidget {
   const PainelFinanceiroScreen({super.key});
@@ -13,7 +15,7 @@ class PainelFinanceiroScreen extends StatefulWidget {
 }
 
 class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
-  String _periodoSelecionado = 'semana'; // 'semana' ou 'mes'
+  String _periodoSelecionado = 'semana';
   double _ganhosPeriodo = 0;
   double _despesasPeriodo = 0;
   double _lucroPeriodo = 0;
@@ -26,9 +28,7 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
   }
 
   Future<void> _calcularTotais() async {
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     final turnos = await DadosService.getTurnos();
     final despesas = await DadosService.getDespesas();
@@ -60,30 +60,32 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            // Seletor de período
-            SegmentedButton<String>(
-              segments: const <ButtonSegment<String>>[
-                ButtonSegment<String>(value: 'semana', label: Text('Semana')),
-                ButtonSegment<String>(value: 'mes', label: Text('Mês')),
-              ],
-              selected: {_periodoSelecionado},
-              onSelectionChanged: (Set<String> newSelection) {
-                setState(() {
-                  _periodoSelecionado = newSelection.first;
-                  _calcularTotais();
-                });
-              },
-            ),
-            const SizedBox(height: 24),
-            // Exibição dos dados
-            _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _buildPainelResumo(),
-          ],
+      // A AppBar foi removida daqui e está na MainScreen
+      body: RefreshIndicator(
+        onRefresh: _calcularTotais,
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              SegmentedButton<String>(
+                segments: const <ButtonSegment<String>>[
+                  ButtonSegment<String>(value: 'semana', label: Text('Esta Semana')),
+                  ButtonSegment<String>(value: 'mes', label: Text('Este Mês')),
+                ],
+                selected: {_periodoSelecionado},
+                onSelectionChanged: (newSelection) {
+                  setState(() {
+                    _periodoSelecionado = newSelection.first;
+                    _calcularTotais();
+                  });
+                },
+              ),
+              const SizedBox(height: 24),
+              _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _buildPainelResumo(),
+            ],
+          ),
         ),
       ),
     );
@@ -92,15 +94,32 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
   Widget _buildPainelResumo() {
     return Card(
       elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            _buildInfoRow('💰 Ganhos Brutos', 'R\$ ${_ganhosPeriodo.toStringAsFixed(2)}'),
+            Text(
+              'Resumo do Período',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            _buildInfoRow('💰 Ganhos Brutos', AppFormatters.formatCurrency(_ganhosPeriodo)),
             const SizedBox(height: 8),
-            _buildInfoRow('💸 Despesas Totais', 'R\$ ${_despesasPeriodo.toStringAsFixed(2)}', isNegative: true),
+            _buildInfoRow('💸 Despesas Totais', AppFormatters.formatCurrency(_despesasPeriodo), isNegative: true),
             const Divider(height: 24),
-            _buildInfoRow('✅ Lucro Líquido', 'R\$ ${_lucroPeriodo.toStringAsFixed(2)}', isHighlight: true),
+            _buildInfoRow('✅ Lucro Líquido', AppFormatters.formatCurrency(_lucroPeriodo), isHighlight: true),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.history),
+              label: const Text('Ver Histórico de Turnos'),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const HistoricoTurnosScreen()),
+                );
+              },
+            ),
           ],
         ),
       ),
@@ -108,27 +127,30 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
   }
 
   Widget _buildInfoRow(String label, String value, {bool isHighlight = false, bool isNegative = false}) {
-    final textTheme = Theme.of(context).textTheme;
     Color? textColor;
     if (isNegative) {
       textColor = Colors.redAccent;
     } else if (isHighlight) {
-      textColor = _lucroPeriodo >= 0 ? Colors.green : Colors.redAccent;
+      final cleanValue = value.replaceAll(RegExp(r'[R$\s.]'), '').replaceAll(',', '.');
+      final lucro = double.tryParse(cleanValue) ?? 0;
+      textColor = lucro >= 0 ? Colors.green.shade700 : Colors.redAccent;
     }
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: textTheme.titleMedium),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: isHighlight ? FontWeight.bold : FontWeight.normal,
-            color: textColor,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 16, color: Colors.black54)),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: isHighlight ? FontWeight.bold : FontWeight.w500,
+              color: textColor,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

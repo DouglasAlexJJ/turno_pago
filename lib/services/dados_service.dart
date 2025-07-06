@@ -137,4 +137,20 @@ class DadosService {
     itens.removeWhere((i) => i.id == id);
     await _salvarListaManutencao(itens);
   }
+  static Future<void> atualizarTurno(Turno turnoAtualizado) async {
+    final List<Turno> turnos = await getTurnos();
+    // Encontra o índice do turno com o mesmo ID
+    final index = turnos.indexWhere((t) => t.id == turnoAtualizado.id);
+    if (index != -1) {
+      turnos[index] = turnoAtualizado; // Substitui o turno antigo pelo novo
+      await _salvarListaTurnos(turnos);
+    }
+  }
+
+// Remove um turno da lista pelo seu ID
+  static Future<void> removerTurno(String id) async {
+    final List<Turno> turnos = await getTurnos();
+    turnos.removeWhere((t) => t.id == id); // Remove o turno da lista
+    await _salvarListaTurnos(turnos);
+  }
 }
