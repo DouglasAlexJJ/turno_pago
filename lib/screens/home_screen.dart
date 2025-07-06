@@ -1,11 +1,9 @@
-// lib/screens/home_screen.dart
-
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:turno_pago/models/turno.dart';
 import '../services/dados_service.dart';
 import 'despesas_screen.dart';
 import 'turno_screen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,7 +19,6 @@ class HomeScreenState extends State<HomeScreen> {
   // Variáveis para o resumo do dia
   double ganhosDoDia = 0;
   double totalDespesasDoDia = 0;
-  double _custoProvisionadoTurno = 0.0;
 
   @override
   void initState() {
@@ -30,16 +27,6 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _carregarDados() async {
-    // --- LÓGICA DE CÁLCULO DE PROVISIONAMENTO ---
-    final prefs = await SharedPreferences.getInstance();
-    final itensManutencao = await DadosService.getManutencaoItens();
-    final custoManutencaoPorKm = itensManutencao.fold(0.0, (soma, item) => soma + item.custoPorKm);
-    final valorCarro = prefs.getDouble('carro_valor') ?? 0;
-    final vidaUtilKm = prefs.getInt('carro_vida_util_km') ?? 0;
-    final custoDepreciacaoPorKm = (vidaUtilKm > 0) ? valorCarro / vidaUtilKm : 0.0;
-    final custoTotalPorKm = custoManutencaoPorKm + custoDepreciacaoPorKm;
-
-    // --- LÓGICA DE DADOS DO DIA E DO TURNO ---
     final todosOsTurnos = await DadosService.getTurnos();
     final todasAsDespesas = await DadosService.getDespesas();
     final hoje = DateTime.now();
@@ -58,23 +45,17 @@ class HomeScreenState extends State<HomeScreen> {
       turnoMaisRecente = todosOsTurnos.first;
     }
 
-    // Calcula o valor final a ser provisionado com base no último turno
-    final double valorProvisaoFinal = (turnoMaisRecente?.kmRodados ?? 0) * custoTotalPorKm;
-
     if (!mounted) return;
 
     setState(() {
       ultimoTurno = turnoMaisRecente;
       ganhosDoDia = somaGanhos;
       totalDespesasDoDia = somaDespesas;
-      _custoProvisionadoTurno = valorProvisaoFinal; // Atribuição direta
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final lucroDoDia = ganhosDoDia - totalDespesasDoDia;
-
     return Scaffold(
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -85,20 +66,37 @@ class HomeScreenState extends State<HomeScreen> {
               _buildCard(
                 title: 'Financeiro do Dia',
                 children: [
-                  _buildInfoRow('💰 Ganhos Brutos', 'R\$ ${ganhosDoDia.toStringAsFixed(2)}'),
-                  _buildInfoRow('💸 Despesas Totais', 'R\$ ${totalDespesasDoDia.toStringAsFixed(2)}', isNegative: true),
+                  _buildInfoRow('💰 Ganhos Brutos (Dia)', 'R\$ ${ganhosDoDia.toStringAsFixed(2)}'),
+                  _buildInfoRow('💸 Despesas (Dia)', 'R\$ ${totalDespesasDoDia.toStringAsFixed(2)}', isNegative: true),
                   const Divider(),
-                  _buildInfoRow('✅ Lucro Líquido', 'R\$ ${lucroDoDia.toStringAsFixed(2)}', isHighlight: true),
+                  _buildInfoRow('✅ Lucro Líquido (Dia)', 'R\$ ${(ganhosDoDia - totalDespesasDoDia).toStringAsFixed(2)}', isHighlight: true),
                 ],
               ),
               const SizedBox(height: 16),
-              _buildCard(
-                title: 'Métricas do Último Turno',
-                children: ultimoTurno != null
-                    ? _buildMetricasTurno(ultimoTurno!)
-                    : [const Text('Nenhum turno registrado ainda.')],
-              ),
+
+              if (ultimoTurno == null)
+                const Card(child: Padding(padding: EdgeInsets.all(16.0), child: Text("Nenhum turno registrado ainda. Adicione um no botão '+'.")))
+              else
+                FutureBuilder<Map<String, dynamic>>(
+                  future: _getDadosDeCusto(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (!snapshot.hasData || snapshot.data == null) {
+                      return const SizedBox.shrink();
+                    }
+
+                    final custos = snapshot.data!;
+                    return _buildAnaliseTurnoCard(
+                      turno: ultimoTurno!,
+                      custoProvisionadoPorKm: custos['custoProvisionado']!,
+                      consumoMedio: custos['consumoMedio']!,
+                    );
+                  },
+                ),
               const SizedBox(height: 16),
+
               ElevatedButton.icon(
                 icon: const Icon(Icons.receipt_long),
                 label: const Text('Gerenciar Despesas'),
@@ -109,28 +107,7 @@ class HomeScreenState extends State<HomeScreen> {
                   );
                   _carregarDados();
                 },
-              ),
-              const SizedBox(height: 16),
-              _buildCard(
-                title: '💰 Cofrinho do Veículo',
-                children: [
-                  const Text(
-                    'Valor a separar do último turno para cobrir custos futuros do veículo:',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 15),
-                  ),
-                  const SizedBox(height: 16),
-                  Center(
-                    child: Text(
-                      'R\$ ${_custoProvisionadoTurno.toStringAsFixed(2)}',
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+              )
             ],
           ),
         ),
@@ -151,20 +128,47 @@ class HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Helper para construir as métricas do turno e evitar repetição de código
-  List<Widget> _buildMetricasTurno(Turno turno) {
-    final ganhoPorKm = turno.kmRodados > 0 ? turno.ganhos / turno.kmRodados : 0.0;
-    final ganhoPorCorrida = turno.plataforma == '99' && turno.corridas > 0 ? turno.ganhos / turno.corridas : 0.0;
+  Future<Map<String, double>> _getDadosDeCusto() async {
+    final prefs = await SharedPreferences.getInstance();
+    final itensManutencao = await DadosService.getManutencaoItens();
 
-    return [
-      _buildInfoRow('🗂 Plataforma', turno.plataforma == '99' ? '99' : 'Outro App'),
-      _buildInfoRow('🛣 KM Rodados', '${turno.kmRodados.toStringAsFixed(1)} km'),
-      _buildInfoRow('📊 Ganho por KM', 'R\$ ${ganhoPorKm.toStringAsFixed(2)}'),
-      if (turno.plataforma == '99') ...[
-        _buildInfoRow('🚗 Corridas Feitas', '${turno.corridas}'),
-        _buildInfoRow('📦 Ganho por Corrida', 'R\$ ${ganhoPorCorrida.toStringAsFixed(2)}'),
-      ]
-    ];
+    final custoManutencaoPorKm = itensManutencao.fold(0.0, (soma, item) => soma + item.custoPorKm);
+
+    final valorCarro = prefs.getDouble('carro_valor') ?? 0;
+    final vidaUtilKm = prefs.getInt('carro_vida_util_km') ?? 0;
+    final custoDepreciacaoPorKm = (vidaUtilKm > 0) ? valorCarro / vidaUtilKm : 0.0;
+
+    final consumo = prefs.getDouble('veiculo_consumo_medio') ?? 10.0; // Padrão 10km/l
+
+    return {
+      'custoProvisionado': custoManutencaoPorKm + custoDepreciacaoPorKm,
+      'consumoMedio': consumo,
+    };
+  }
+
+  Widget _buildAnaliseTurnoCard({
+    required Turno turno,
+    required double custoProvisionadoPorKm,
+    required double consumoMedio,
+  }) {
+    final gastoCombustivel = (consumoMedio > 0)
+        ? (turno.kmRodados / consumoMedio) * turno.precoCombustivel
+        : 0.0;
+
+    final custoTotalProvisionado = turno.kmRodados * custoProvisionadoPorKm;
+    final lucroLiquidoTurno = turno.ganhos - gastoCombustivel - custoTotalProvisionado;
+
+    return _buildCard(
+      title: 'Análise do Último Turno',
+      children: [
+        _buildInfoRow('🛣️ KM Rodados', '${turno.kmRodados.toStringAsFixed(1)} km'),
+        _buildInfoRow('💰 Ganhos Brutos', 'R\$ ${turno.ganhos.toStringAsFixed(2)}'),
+        _buildInfoRow('⛽ Gasto Combustível', 'R\$ ${gastoCombustivel.toStringAsFixed(2)}', isNegative: true),
+        _buildInfoRow('🛠️ Custos Futuros', 'R\$ ${custoTotalProvisionado.toStringAsFixed(2)}', isNegative: true),
+        const Divider(),
+        _buildInfoRow('✅ Lucro Líquido (Turno)', 'R\$ ${lucroLiquidoTurno.toStringAsFixed(2)}', isHighlight: true),
+      ],
+    );
   }
 
   Widget _buildCard({required String title, required List<Widget> children}) {
@@ -192,7 +196,6 @@ class HomeScreenState extends State<HomeScreen> {
       final lucro = double.tryParse(value.replaceAll('R\$ ', '')) ?? 0;
       textColor = lucro >= 0 ? Colors.green : Colors.redAccent;
     }
-
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(

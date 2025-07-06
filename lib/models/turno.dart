@@ -8,7 +8,8 @@ class Turno {
   final String plataforma;
   final double ganhos;
   final double kmRodados;
-  final int corridas; // Será 0 se não for '99'
+  final int corridas;
+  final double precoCombustivel;
 
   Turno({
     required this.id,
@@ -16,6 +17,7 @@ class Turno {
     required this.plataforma,
     required this.ganhos,
     required this.kmRodados,
+    required this.precoCombustivel, // Adicione esta linha
     this.corridas = 0,
   });
 
@@ -27,6 +29,7 @@ class Turno {
       'ganhos': ganhos,
       'kmRodados': kmRodados,
       'corridas': corridas,
+      'precoCombustivel': precoCombustivel,
     };
   }
 
@@ -38,6 +41,7 @@ class Turno {
       ganhos: map['ganhos'],
       kmRodados: map['kmRodados'],
       corridas: map['corridas'] ?? 0,
+      precoCombustivel: map['precoCombustivel'] ?? 0.0,
     );
   }
 
