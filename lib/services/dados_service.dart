@@ -111,11 +111,30 @@ class DadosService {
   static Future<List<ManutencaoItem>> getManutencaoItens() async {
     final prefs = await SharedPreferences.getInstance();
     final String? itensJson = prefs.getString(_manutencaoKey);
-    if (itensJson != null) {
+
+    List<ManutencaoItem> itens = [];
+
+    if (itensJson != null && itensJson.isNotEmpty) {
       final List<dynamic> itensMap = json.decode(itensJson);
-      return itensMap.map((map) => ManutencaoItem.fromMap(map)).toList();
+      itens = itensMap.map((map) => ManutencaoItem.fromMap(map)).toList();
     }
-    return [];
+
+    // Se a lista estiver vazia (primeiro acesso a esta funcionalidade),
+    // criamos e salvamos uma lista padrão.
+    if (itens.isEmpty) {
+      itens = [
+        ManutencaoItem(id: 'pneu', nome: 'Pneus', custo: 1600, vidaUtilKm: 40000),
+        ManutencaoItem(id: 'oleo', nome: 'Troca de Óleo e Filtro', custo: 250, vidaUtilKm: 8000),
+        ManutencaoItem(id: 'pastilha', nome: 'Pastilhas de Freio', custo: 300, vidaUtilKm: 30000),
+        ManutencaoItem(id: 'correia', nome: 'Correia Dentada e Tensor', custo: 600, vidaUtilKm: 50000),
+        ManutencaoItem(id: 'arrefecimento', nome: 'Líquido de Arrefecimento', custo: 150, vidaUtilKm: 60000),
+        ManutencaoItem(id: 'velas', nome: 'Velas de Ignição', custo: 200, vidaUtilKm: 40000),
+      ];
+      // Salva a lista padrão para que ela seja carregada nas próximas vezes
+      await _salvarListaManutencao(itens);
+    }
+
+    return itens;
   }
 
 // Adiciona ou atualiza um item na lista

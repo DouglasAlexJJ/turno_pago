@@ -31,9 +31,10 @@ class TurnoScreenState extends State<TurnoScreen> {
       leftSymbol: 'R\$ ', decimalSeparator: ',', thousandSeparator: '.');
   final _corridasController = TextEditingController();
 
-  // Controlador comum
+  // Controladores comuns
   final _precoCombustivelController = MoneyMaskedTextController(
       leftSymbol: 'R\$ ', decimalSeparator: ',', thousandSeparator: '.');
+  final _kmAtualController = TextEditingController(); // NOVO CONTROLADOR
 
   @override
   void initState() {
@@ -47,6 +48,7 @@ class TurnoScreenState extends State<TurnoScreen> {
       _kmRodadoController.text = turno.kmRodados.toString().replaceAll('.', ',');
       _corridasController.text = turno.corridas.toString();
       _precoCombustivelController.updateValue(turno.precoCombustivel);
+      _kmAtualController.text = turno.kmAtualVeiculo.toString(); // Preenche o novo campo na edição
     }
   }
 
@@ -55,7 +57,16 @@ class TurnoScreenState extends State<TurnoScreen> {
     double kmFinais = 0;
     int corridasFinais = 0;
 
-    // Lógica de cálculo condicional para CRIAÇÃO
+    // Validação do novo campo
+    final kmAtual = int.tryParse(_kmAtualController.text) ?? 0;
+    if (kmAtual <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Por favor, informe a quilometragem atual do veículo.'),
+        backgroundColor: Colors.red,
+      ));
+      return;
+    }
+
     if (!_isEditing && _plataformaSelecionada == '99') {
       final ganhoPorCorrida = _ganhoPorCorridaController.numberValue;
       final ganhoPorKm = _ganhoPorKmController.numberValue;
@@ -72,7 +83,7 @@ class TurnoScreenState extends State<TurnoScreen> {
       ganhosFinais = ganhoPorCorrida * corridasFinais;
       kmFinais = ganhosFinais / ganhoPorKm;
 
-    } else { // Para "Outros Apps" ou para EDIÇÃO
+    } else {
       ganhosFinais = _ganhosController.numberValue;
       kmFinais = double.tryParse(_kmRodadoController.text.replaceAll(',', '.')) ?? 0;
       corridasFinais = int.tryParse(_corridasController.text) ?? 0;
@@ -103,6 +114,7 @@ class TurnoScreenState extends State<TurnoScreen> {
       kmRodados: kmFinais,
       precoCombustivel: precoCombustivel,
       corridas: corridasFinais,
+      kmAtualVeiculo: kmAtual, // Salva o novo dado
     );
 
     if (_isEditing) {
@@ -113,12 +125,21 @@ class TurnoScreenState extends State<TurnoScreen> {
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Turno salvo com sucesso!')),
+      const SnackBar(content: Text('Turno salvo com sucesso!')),
     );
     Navigator.pop(context, true);
   }
 
-  // Widget que constrói os campos para a 99 (Criação)
+  @override
+  void dispose() {
+    _kmRodadoController.dispose();
+    _corridasController.dispose();
+    _kmAtualController.dispose(); // Dispose do novo controller
+    super.dispose();
+  }
+
+  // ... (os métodos _buildForm99 e _buildFormTotais continuam iguais) ...
+
   Widget _buildForm99() {
     return Column(
       children: [
@@ -141,7 +162,6 @@ class TurnoScreenState extends State<TurnoScreen> {
     );
   }
 
-  // Widget que constrói os campos para Outros Apps (Criação) ou Edição
   Widget _buildFormTotais() {
     return Column(
       children: [
@@ -173,6 +193,24 @@ class TurnoScreenState extends State<TurnoScreen> {
         padding: const EdgeInsets.all(16.0),
         child: ListView(
           children: [
+            // NOVO CAMPO DE KM ATUAL - posicionado no topo para destaque
+            Card(
+              elevation: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: TextFormField(
+                  controller: _kmAtualController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'KM Atual do Veículo',
+                    border: InputBorder.none,
+                    icon: Icon(Icons.speed),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
             DropdownButton<String>(
               value: _plataformaSelecionada,
               isExpanded: true,
@@ -190,7 +228,6 @@ class TurnoScreenState extends State<TurnoScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Lógica de renderização corrigida
             if (_isEditing)
               _buildFormTotais()
             else

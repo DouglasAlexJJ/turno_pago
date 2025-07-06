@@ -7,16 +7,35 @@ class ManutencaoItem {
   final String nome;
   final double custo;
   final int vidaUtilKm;
+  final int kmUltimaTroca;
+  final DateTime? dataUltimaTroca;
 
   ManutencaoItem({
     required this.id,
     required this.nome,
     required this.custo,
     required this.vidaUtilKm,
+    this.kmUltimaTroca = 0,
+    this.dataUltimaTroca,
   });
 
-  // Custo por KM deste item específico
   double get custoPorKm => vidaUtilKm > 0 ? custo / vidaUtilKm : 0;
+
+  int get proximaTrocaKm => kmUltimaTroca + vidaUtilKm;
+
+  ManutencaoItem copyWith({
+    int? kmUltimaTroca,
+    DateTime? dataUltimaTroca,
+  }) {
+    return ManutencaoItem(
+      id: id,
+      nome: nome,
+      custo: custo,
+      vidaUtilKm: vidaUtilKm,
+      kmUltimaTroca: kmUltimaTroca ?? this.kmUltimaTroca,
+      dataUltimaTroca: dataUltimaTroca ?? this.dataUltimaTroca,
+    );
+  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -24,6 +43,8 @@ class ManutencaoItem {
       'nome': nome,
       'custo': custo,
       'vidaUtilKm': vidaUtilKm,
+      'kmUltimaTroca': kmUltimaTroca,
+      'dataUltimaTroca': dataUltimaTroca?.toIso8601String(),
     };
   }
 
@@ -33,6 +54,10 @@ class ManutencaoItem {
       nome: map['nome'],
       custo: map['custo'],
       vidaUtilKm: map['vidaUtilKm'],
+      kmUltimaTroca: map['kmUltimaTroca'] ?? 0,
+      dataUltimaTroca: map['dataUltimaTroca'] != null
+          ? DateTime.parse(map['dataUltimaTroca'])
+          : null,
     );
   }
 

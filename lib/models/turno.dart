@@ -10,6 +10,7 @@ class Turno {
   final double kmRodados;
   final int corridas;
   final double precoCombustivel;
+  final int kmAtualVeiculo;
 
   Turno({
     required this.id,
@@ -17,7 +18,8 @@ class Turno {
     required this.plataforma,
     required this.ganhos,
     required this.kmRodados,
-    required this.precoCombustivel, // Adicione esta linha
+    required this.precoCombustivel,
+    required this.kmAtualVeiculo,
     this.corridas = 0,
   });
 
@@ -30,6 +32,7 @@ class Turno {
       'kmRodados': kmRodados,
       'corridas': corridas,
       'precoCombustivel': precoCombustivel,
+      'kmAtualVeiculo': kmAtualVeiculo,
     };
   }
 
@@ -42,6 +45,7 @@ class Turno {
       kmRodados: map['kmRodados'],
       corridas: map['corridas'] ?? 0,
       precoCombustivel: map['precoCombustivel'] ?? 0.0,
+      kmAtualVeiculo: map['kmAtualVeiculo'] ?? 0,
     );
   }
 
