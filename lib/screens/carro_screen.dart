@@ -1,7 +1,8 @@
 // lib/screens/carro_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:turno_pago/models/veiculo.dart';
+import 'package:turno_pago/services/veiculo_service.dart';
 
 class CarroScreen extends StatefulWidget {
   const CarroScreen({super.key});
@@ -13,7 +14,9 @@ class CarroScreen extends StatefulWidget {
 class CarroScreenState extends State<CarroScreen> {
   final _valorVeiculoController = TextEditingController();
   final _vidaUtilKmController = TextEditingController();
+  late Veiculo _veiculo;
   double _custoPorKm = 0.0;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -22,10 +25,14 @@ class CarroScreenState extends State<CarroScreen> {
   }
 
   Future<void> _carregarDados() async {
-    final prefs = await SharedPreferences.getInstance();
-    _valorVeiculoController.text = (prefs.getDouble('carro_valor') ?? 0.0).toString();
-    _vidaUtilKmController.text = (prefs.getInt('carro_vida_util_km') ?? 0).toString();
-    _calcularCustoPorKm();
+    final veiculoData = await VeiculoService.getVeiculo();
+    setState(() {
+      _veiculo = veiculoData;
+      _valorVeiculoController.text = _veiculo.valorProximoVeiculo.toString();
+      _vidaUtilKmController.text = _veiculo.proximaTrocaKm.toString();
+      _calcularCustoPorKm();
+      _isLoading = false;
+    });
   }
 
   void _calcularCustoPorKm() {
@@ -37,12 +44,13 @@ class CarroScreenState extends State<CarroScreen> {
   }
 
   Future<void> _salvarDados() async {
-    final prefs = await SharedPreferences.getInstance();
-    final valor = double.tryParse(_valorVeiculoController.text) ?? 0;
-    final km = int.tryParse(_vidaUtilKmController.text) ?? 0;
-
-    await prefs.setDouble('carro_valor', valor);
-    await prefs.setInt('carro_vida_util_km', km);
+    final novoVeiculo = Veiculo(
+      consumoMedio: _veiculo.consumoMedio, // Preserva o dado antigo
+      kmAtual: _veiculo.kmAtual,
+      valorProximoVeiculo: double.tryParse(_valorVeiculoController.text) ?? 0,
+      proximaTrocaKm: int.tryParse(_vidaUtilKmController.text) ?? 0,
+    );
+    await VeiculoService.salvarVeiculo(novoVeiculo);
 
     _calcularCustoPorKm();
 
@@ -55,8 +63,10 @@ class CarroScreenState extends State<CarroScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Plano de Troca de veículo')),
-      body: Padding(
+      appBar: AppBar(title: const Text('Plano de Troca de Veículo')),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Padding(
         padding: const EdgeInsets.all(16.0),
         child: ListView(
           children: [

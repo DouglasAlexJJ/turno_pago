@@ -8,12 +8,14 @@ import 'despesas_screen.dart';
 import 'turno_screen.dart';
 import '../services/dados_service.dart';
 import 'historico_turnos_screen.dart';
+import 'package:turno_pago/services/veiculo_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
   HomeScreenState createState() => HomeScreenState();
+
 }
 
 class HomeScreenState extends State<HomeScreen> {
@@ -58,6 +60,7 @@ class HomeScreenState extends State<HomeScreen> {
       custoLavagem = custo;
     }
     // --- FIM DA LÓGICA DA LAVAGEM ---
+
 
 
     final turnosDeHoje = todosOsTurnos.where((t) =>
@@ -178,21 +181,17 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   Future<Map<String, double>> _getDadosDeCusto() async {
-    final prefs = await SharedPreferences.getInstance();
+    final veiculo = await VeiculoService.getVeiculo(); // Usa o serviço
     final itensManutencao = await DadosService.getManutencaoItens();
 
     final custoManutencaoPorKm = itensManutencao.fold(0.0, (soma, item) => soma + item.custoPorKm);
 
-    final valorCarro = prefs.getDouble('carro_valor') ?? 0;
-    final vidaUtilKm = prefs.getInt('carro_vida_util_km') ?? 0;
-    final custoDepreciacaoPorKm = (vidaUtilKm > 0) ? valorCarro / vidaUtilKm : 0.0;
-
-    final consumo = prefs.getDouble('veiculo_consumo_medio') ?? 10.0;
+    // O custo de depreciação agora é calculado dentro do modelo Veiculo
+    final custoDepreciacaoPorKm = veiculo.depreciacaoPorKm;
 
     return {
-      'custoManutencao': custoManutencaoPorKm,
-      'custoDepreciacao': custoDepreciacaoPorKm,
-      'consumoMedio': consumo,
+      'custoProvisionado': custoManutencaoPorKm + custoDepreciacaoPorKm,
+      'consumoMedio': veiculo.consumoMedio,
     };
   }
 
