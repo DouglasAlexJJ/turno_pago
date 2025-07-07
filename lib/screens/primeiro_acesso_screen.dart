@@ -1,11 +1,10 @@
 // lib/screens/primeiro_acesso_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_masked_text2/flutter_masked_text2.dart';
 import 'package:turno_pago/models/veiculo.dart';
-import 'package:turno_pago/services/veiculo_service.dart'; // Importa o novo serviço
-import 'main_screen.dart';
+import 'package:turno_pago/services/veiculo_service.dart';
+import 'manutencao_screen.dart'; // Importa a tela de manutenção
 
 class PrimeiroAcessoScreen extends StatefulWidget {
   const PrimeiroAcessoScreen({super.key});
@@ -25,7 +24,6 @@ class _PrimeiroAcessoScreenState extends State<PrimeiroAcessoScreen> {
 
   Future<void> _salvarEContinuar() async {
     if (_formKey.currentState!.validate()) {
-      // Cria um objeto Veiculo com os dados da tela
       final veiculo = Veiculo(
         consumoMedio: double.tryParse(_consumoController.text) ?? 0.0,
         valorProximoVeiculo: _valorVeiculoController.numberValue,
@@ -33,18 +31,16 @@ class _PrimeiroAcessoScreenState extends State<PrimeiroAcessoScreen> {
         kmAtual: int.tryParse(_kmAtualController.text) ?? 0,
       );
 
-      // Usa o VeiculoService para salvar os dados
       await VeiculoService.salvarVeiculo(veiculo);
-
-      // Marca que o primeiro acesso foi concluído
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('primeiro_acesso_concluido', true);
 
       if (!mounted) return;
 
+      // MODIFICAÇÃO: Navega para a tela de manutenção em modo de configuração
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const MainScreen()),
+        MaterialPageRoute(
+          builder: (context) => const ManutencaoScreen(isFirstTimeSetup: true),
+        ),
       );
     }
   }
@@ -68,7 +64,7 @@ class _PrimeiroAcessoScreenState extends State<PrimeiroAcessoScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Vamos começar configurando os dados do seu veículo para cálculos mais precisos.',
+                  'Passo 1 de 2: Configure os dados do seu veículo.',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
@@ -107,7 +103,7 @@ class _PrimeiroAcessoScreenState extends State<PrimeiroAcessoScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
-                  child: const Text('Salvar e Começar'),
+                  child: const Text('Avançar para Manutenção'),
                 ),
               ],
             ),
