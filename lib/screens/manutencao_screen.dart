@@ -6,9 +6,9 @@ import 'package:turno_pago/models/manutencao_item.dart';
 import 'package:turno_pago/screens/add_edit_manutencao_screen.dart';
 import 'package:turno_pago/screens/main_screen.dart';
 import 'package:turno_pago/services/dados_service.dart';
+import 'package:turno_pago/utils/app_formatters.dart'; // Importa nosso formatador
 
 class ManutencaoScreen extends StatefulWidget {
-  // Parâmetro para identificar se é o primeiro acesso
   final bool isFirstTimeSetup;
 
   const ManutencaoScreen({super.key, this.isFirstTimeSetup = false});
@@ -56,7 +56,6 @@ class ManutencaoScreenState extends State<ManutencaoScreen> {
     }
   }
 
-  // NOVA FUNÇÃO: Marca o setup como concluído e vai para a tela principal
   Future<void> _concluirSetup() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('primeiro_acesso_concluido', true);
@@ -66,7 +65,7 @@ class ManutencaoScreenState extends State<ManutencaoScreen> {
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (context) => const MainScreen()),
-          (Route<dynamic> route) => false, // Remove todas as rotas anteriores
+          (Route<dynamic> route) => false,
     );
   }
 
@@ -77,14 +76,12 @@ class ManutencaoScreenState extends State<ManutencaoScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Custos de Manutenção'),
-        // Remove o botão de voltar automático durante o setup
         automaticallyImplyLeading: !widget.isFirstTimeSetup,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Column(
         children: [
-          // Card de Resumo
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Card(
@@ -104,8 +101,9 @@ class ManutencaoScreenState extends State<ManutencaoScreen> {
                       style: TextStyle(fontSize: 16),
                       textAlign: TextAlign.center,
                     ),
+                    // VALOR MODIFICADO AQUI
                     Text(
-                      'R\$ ${custoTotalPorKm.toStringAsFixed(3)}',
+                      AppFormatters.formatCurrencyPerKm(custoTotalPorKm),
                       style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                         color: Colors.amber[800],
                         fontWeight: FontWeight.bold,
@@ -116,7 +114,6 @@ class ManutencaoScreenState extends State<ManutencaoScreen> {
               ),
             ),
           ),
-          // Lista de Itens
           Expanded(
             child: _itens.isEmpty
                 ? const Center(child: Text("Nenhum item adicionado.\nUse o botão '+' para começar.", textAlign: TextAlign.center))
@@ -128,7 +125,8 @@ class ManutencaoScreenState extends State<ManutencaoScreen> {
                   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   child: ListTile(
                     title: Text(item.nome),
-                    subtitle: Text('Custo/KM: R\$ ${item.custoPorKm.toStringAsFixed(3)}'),
+                    // VALOR MODIFICADO AQUI
+                    subtitle: Text('Custo/KM: ${AppFormatters.formatCurrencyPerKm(item.custoPorKm)}'),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -150,7 +148,6 @@ class ManutencaoScreenState extends State<ManutencaoScreen> {
               },
             ),
           ),
-          // Botão de Concluir que só aparece no setup
           if (widget.isFirstTimeSetup)
             Padding(
               padding: const EdgeInsets.all(16.0),
@@ -165,7 +162,6 @@ class ManutencaoScreenState extends State<ManutencaoScreen> {
             )
         ],
       ),
-      // Botão flutuante para adicionar itens
       floatingActionButton: FloatingActionButton(
         onPressed: _navegarParaAddItem,
         child: const Icon(Icons.add),

@@ -1,6 +1,8 @@
 // lib/screens/add_edit_manutencao_screen.dart
 
 import 'package:flutter/material.dart';
+// IMPORTAÇÃO ADICIONADA
+import 'package:flutter_masked_text2/flutter_masked_text2.dart';
 import 'package:turno_pago/models/manutencao_item.dart';
 import 'package:turno_pago/services/dados_service.dart';
 import 'package:uuid/uuid.dart';
@@ -17,15 +19,19 @@ class AddEditManutencaoScreen extends StatefulWidget {
 class _AddEditManutencaoScreenState extends State<AddEditManutencaoScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nomeController = TextEditingController();
-  final _custoController = TextEditingController();
   final _vidaUtilController = TextEditingController();
+
+  // CONTROLADOR MODIFICADO
+  final _custoController = MoneyMaskedTextController(
+      leftSymbol: 'R\$ ', decimalSeparator: ',', thousandSeparator: '.');
 
   @override
   void initState() {
     super.initState();
     if (widget.item != null) {
       _nomeController.text = widget.item!.nome;
-      _custoController.text = widget.item!.custo.toString();
+      // LÓGICA DE INICIALIZAÇÃO MODIFICADA
+      _custoController.updateValue(widget.item!.custo);
       _vidaUtilController.text = widget.item!.vidaUtilKm.toString();
     }
   }
@@ -33,9 +39,10 @@ class _AddEditManutencaoScreenState extends State<AddEditManutencaoScreen> {
   Future<void> _salvarItem() async {
     if (_formKey.currentState!.validate()) {
       final item = ManutencaoItem(
-        id: widget.item?.id ?? const Uuid().v4(), // Usa o ID existente ou cria um novo
+        id: widget.item?.id ?? const Uuid().v4(),
         nome: _nomeController.text,
-        custo: double.parse(_custoController.text),
+        // LÓGICA DE LEITURA DO VALOR MODIFICADA
+        custo: _custoController.numberValue,
         vidaUtilKm: int.parse(_vidaUtilController.text),
       );
       await DadosService.salvarManutencaoItem(item);
@@ -63,16 +70,16 @@ class _AddEditManutencaoScreenState extends State<AddEditManutencaoScreen> {
               ),
               const SizedBox(height: 16),
               TextFormField(
-                controller: _custoController,
+                controller: _custoController, // O controlador já faz a mágica
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Custo Total da Troca (R\$)'),
-                validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null,
+                decoration: const InputDecoration(labelText: 'Custo Total da Troca'), // Label ajustada
+                validator: (v) => _custoController.numberValue == 0 ? 'Campo obrigatório' : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _vidaUtilController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Duração Média (em KM)'),
+                decoration: const InputDecoration(labelText: 'Próxima troca (em KM)'),
                 validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null,
               ),
               const SizedBox(height: 24),
