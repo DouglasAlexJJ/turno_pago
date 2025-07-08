@@ -1,6 +1,7 @@
 // lib/screens/add_despesa_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter_masked_text2/flutter_masked_text2.dart';
 import 'package:uuid/uuid.dart';
 import '../models/despesa.dart';
 import '../services/dados_service.dart';
@@ -15,8 +16,12 @@ class AddDespesaScreen extends StatefulWidget {
 class AddDespesaScreenState extends State<AddDespesaScreen> {
   final _formKey = GlobalKey<FormState>();
   final _descricaoController = TextEditingController();
-  final _valorController = TextEditingController();
-  String _categoriaSelecionada = 'Combustível'; // Categoria padrão
+  final _valorController = MoneyMaskedTextController(
+      leftSymbol: 'R\$ ', decimalSeparator: ',', thousandSeparator: '.');
+  String _categoriaSelecionada = 'Combustível';
+
+  // Controladores de foco
+  final _valorFocusNode = FocusNode();
 
   final List<String> _categorias = [
     'Combustível',
@@ -28,11 +33,14 @@ class AddDespesaScreenState extends State<AddDespesaScreen> {
   ];
 
   Future<void> _salvarDespesa() async {
+    // Esconde o teclado antes de salvar
+    FocusScope.of(context).unfocus();
+
     if (_formKey.currentState!.validate()) {
       final novaDespesa = Despesa(
-        id: const Uuid().v4(), // Gera um ID único
+        id: const Uuid().v4(),
         descricao: _descricaoController.text,
-        valor: double.parse(_valorController.text.replaceAll(',', '.')),
+        valor: _valorController.numberValue,
         data: DateTime.now(),
         categoria: _categoriaSelecionada,
       );
@@ -40,7 +48,7 @@ class AddDespesaScreenState extends State<AddDespesaScreen> {
       await DadosService.adicionarDespesa(novaDespesa);
 
       if (!mounted) return;
-      Navigator.pop(context, true); // Volta e indica que a lista deve ser atualizada
+      Navigator.pop(context, true);
     }
   }
 
@@ -48,6 +56,7 @@ class AddDespesaScreenState extends State<AddDespesaScreen> {
   void dispose() {
     _descricaoController.dispose();
     _valorController.dispose();
+    _valorFocusNode.dispose(); // Limpa o focus node
     super.dispose();
   }
 
@@ -64,20 +73,23 @@ class AddDespesaScreenState extends State<AddDespesaScreen> {
               TextFormField(
                 controller: _descricaoController,
                 decoration: const InputDecoration(labelText: 'Descrição'),
+                textInputAction: TextInputAction.next, // Ação do teclado
+                onEditingComplete: () =>
+                    FocusScope.of(context).requestFocus(_valorFocusNode), // Pula para o próximo
                 validator: (value) =>
                 value!.isEmpty ? 'Por favor, insira uma descrição' : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _valorController,
-                decoration: const InputDecoration(labelText: 'Valor (R\$)'),
+                focusNode: _valorFocusNode, // Associa o focus node
+                decoration: const InputDecoration(labelText: 'Valor'),
                 keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.done, // Ação final
+                onEditingComplete: _salvarDespesa, // Salva ao concluir
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Por favor, insira um valor';
-                  }
-                  if (double.tryParse(value.replaceAll(',', '.')) == null) {
-                    return 'Por favor, insira um número válido';
+                  if (_valorController.numberValue <= 0) {
+                    return 'Por favor, insira um valor válido';
                   }
                   return null;
                 },
