@@ -3,10 +3,12 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:turno_pago/models/manutencao_item.dart';
+import 'package:turno_pago/models/veiculo.dart';
 import 'package:turno_pago/screens/add_edit_manutencao_screen.dart';
 import 'package:turno_pago/screens/main_screen.dart';
 import 'package:turno_pago/services/dados_service.dart';
-import 'package:turno_pago/utils/app_formatters.dart'; // Importa nosso formatador
+import 'package:turno_pago/services/veiculo_service.dart';
+import 'package:turno_pago/utils/app_formatters.dart';
 
 class ManutencaoScreen extends StatefulWidget {
   final bool isFirstTimeSetup;
@@ -19,21 +21,87 @@ class ManutencaoScreen extends StatefulWidget {
 
 class ManutencaoScreenState extends State<ManutencaoScreen> {
   List<ManutencaoItem> _itens = [];
+  Veiculo? _veiculo;
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _carregarItens();
+    _carregarDados();
   }
 
-  Future<void> _carregarItens() async {
+  Future<void> _carregarDados() async {
     setState(() => _isLoading = true);
-    final itens = await DadosService.getManutencaoItens();
+    final itensData = await DadosService.getManutencaoItens();
+    final veiculoData = await VeiculoService.getVeiculo();
     setState(() {
-      _itens = itens;
+      _itens = itensData;
+      _veiculo = veiculoData;
       _isLoading = false;
     });
+  }
+
+  // MÉTODO CORRIGIDO
+  Future<void> _registrarTroca(ManutencaoItem item) async {
+    final kmController =
+    TextEditingController(text: _veiculo?.kmAtual.toString() ?? '');
+    final formKey = GlobalKey<FormState>();
+
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Registrar Troca de "${item.nome}"'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: kmController,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'KM atual do veículo',
+              hintText: 'Digite a quilometragem exata',
+            ),
+            validator: (v) {
+              if (v == null || v.isEmpty) return 'Campo obrigatório';
+              if (int.tryParse(v) == null) return 'Número inválido';
+              return null;
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(context, true);
+              }
+            },
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar == true) {
+      final kmAtual = int.parse(kmController.text);
+
+      // Cria uma nova instância do item com os dados atualizados
+      final itemAtualizado = item.copyWith(
+        kmUltimaTroca: kmAtual,
+        dataUltimaTroca: DateTime.now(),
+      );
+      // Salva o item atualizado
+      await DadosService.salvarManutencaoItem(itemAtualizado);
+
+      if (_veiculo != null) {
+        // Salva a KM atual do veículo
+        await VeiculoService.salvarVeiculo(
+            _veiculo!.copyWith(kmAtual: kmAtual));
+      }
+      _carregarDados();
+    }
   }
 
   void _navegarParaAddItem() async {
@@ -42,7 +110,7 @@ class ManutencaoScreenState extends State<ManutencaoScreen> {
       MaterialPageRoute(builder: (_) => const AddEditManutencaoScreen()),
     );
     if (recarregar == true) {
-      _carregarItens();
+      _carregarDados();
     }
   }
 
@@ -52,16 +120,14 @@ class ManutencaoScreenState extends State<ManutencaoScreen> {
       MaterialPageRoute(builder: (_) => AddEditManutencaoScreen(item: item)),
     );
     if (recarregar == true) {
-      _carregarItens();
+      _carregarDados();
     }
   }
 
   Future<void> _concluirSetup() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('primeiro_acesso_concluido', true);
-
     if (!mounted) return;
-
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (context) => const MainScreen()),
@@ -71,7 +137,8 @@ class ManutencaoScreenState extends State<ManutencaoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final double custoTotalPorKm = _itens.fold(0.0, (soma, item) => soma + item.custoPorKm);
+    final double custoTotalPorKm =
+    _itens.fold(0.0, (soma, item) => soma + item.custoPorKm);
 
     return Scaffold(
       appBar: AppBar(
@@ -90,21 +157,25 @@ class ManutencaoScreenState extends State<ManutencaoScreen> {
                 child: Column(
                   children: [
                     if (widget.isFirstTimeSetup)
-                      Text(
-                        'Passo 2 de 2: Adicione itens de manutenção para um cálculo de custos preciso. Ex: Pneus, Troca de Óleo.',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.titleMedium,
+                      Padding(
+                        padding: const EdgeInsets.only(bottom:16.0),
+                        child: Text(
+                          'Passo 2 de 2: Adicione itens de manutenção para um cálculo de custos preciso. Ex: Pneus, Troca de Óleo.',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
                       ),
-                    if (widget.isFirstTimeSetup) const SizedBox(height: 16),
                     const Text(
                       'Custo Total de Manutenção por KM:',
                       style: TextStyle(fontSize: 16),
                       textAlign: TextAlign.center,
                     ),
-                    // VALOR MODIFICADO AQUI
                     Text(
                       AppFormatters.formatCurrencyPerKm(custoTotalPorKm),
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      style: Theme.of(context)
+                          .textTheme
+                          .headlineMedium
+                          ?.copyWith(
                         color: Colors.amber[800],
                         fontWeight: FontWeight.bold,
                       ),
@@ -116,32 +187,64 @@ class ManutencaoScreenState extends State<ManutencaoScreen> {
           ),
           Expanded(
             child: _itens.isEmpty
-                ? const Center(child: Text("Nenhum item adicionado.\nUse o botão '+' para começar.", textAlign: TextAlign.center))
+                ? const Center(
+                child: Text(
+                    "Nenhum item adicionado.\nUse o botão '+' para começar.",
+                    textAlign: TextAlign.center))
                 : ListView.builder(
               itemCount: _itens.length,
               itemBuilder: (context, index) {
                 final item = _itens[index];
-                return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: ListTile(
-                    title: Text(item.nome),
-                    // VALOR MODIFICADO AQUI
-                    subtitle: Text('Custo/KM: ${AppFormatters.formatCurrencyPerKm(item.custoPorKm)}'),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.edit, color: Colors.grey),
-                          onPressed: () => _navegarParaEditItem(item),
+                return Dismissible(
+                  key: Key(item.id),
+                  direction: DismissDirection.endToStart,
+                  onDismissed: (direction) {
+                    DadosService.removerManutencaoItem(item.id);
+                    setState(() {
+                      _itens.removeAt(index);
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text("${item.nome} removido.")),
+                    );
+                  },
+                  background: Container(
+                    color: Colors.red,
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: const Icon(Icons.delete, color: Colors.white),
+                  ),
+                  child: Card(
+                    margin: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 6),
+                    child: InkWell(
+                      onTap: () => _navegarParaEditItem(item),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(item.nome,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18)),
+                            const SizedBox(height: 4),
+                            Text(
+                                'Custo/KM: ${AppFormatters.formatCurrencyPerKm(item.custoPorKm)}'),
+                            const Divider(height: 20),
+                            Center(
+                              child: ElevatedButton.icon(
+                                icon: const Icon(Icons.sync, size: 18),
+                                label: const Text('Troca Realizada'),
+                                onPressed: () => _registrarTroca(item),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green.shade50,
+                                  foregroundColor: Colors.green.shade800,
+                                ),
+                              ),
+                            )
+                          ],
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.redAccent),
-                          onPressed: () async {
-                            await DadosService.removerManutencaoItem(item.id);
-                            _carregarItens();
-                          },
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 );
@@ -155,7 +258,8 @@ class ManutencaoScreenState extends State<ManutencaoScreen> {
                 onPressed: _concluirSetup,
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  textStyle: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 child: const Text('Concluir e Ir para o App'),
               ),

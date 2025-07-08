@@ -17,29 +17,27 @@ class Despesa {
     required this.categoria,
   });
 
-  // Método para converter um objeto Despesa em um Map (para JSON)
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'descricao': descricao,
       'valor': valor,
-      'data': data.toIso8601String(), // Salva a data como string
+      'data': data.toIso8601String(),
       'categoria': categoria,
     };
   }
 
-  // Método para criar um objeto Despesa a partir de um Map (de JSON)
+  // MÉTODO ATUALIZADO PARA SER MAIS SEGURO
   factory Despesa.fromMap(Map<String, dynamic> map) {
     return Despesa(
-      id: map['id'],
-      descricao: map['descricao'],
-      valor: map['valor'],
-      data: DateTime.parse(map['data']), // Converte a string de volta para DateTime
-      categoria: map['categoria'],
+      id: map['id'] ?? '',
+      descricao: map['descricao'] ?? '',
+      valor: map['valor']?.toDouble() ?? 0.0,
+      data: map['data'] != null ? DateTime.parse(map['data']) : DateTime.now(),
+      categoria: map['categoria'] ?? 'Outros',
     );
   }
 
-  // Funções de conveniência para JSON
   String toJson() => json.encode(toMap());
 
   factory Despesa.fromJson(String source) => Despesa.fromMap(json.decode(source));

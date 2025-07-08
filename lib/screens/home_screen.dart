@@ -6,6 +6,7 @@ import 'package:turno_pago/models/manutencao_item.dart';
 import 'package:turno_pago/models/turno.dart';
 import 'package:turno_pago/models/veiculo.dart';
 import 'package:turno_pago/screens/historico_turnos_screen.dart';
+import 'package:turno_pago/screens/manutencao_screen.dart';
 import 'package:turno_pago/utils/app_formatters.dart';
 import 'despesas_screen.dart';
 import 'turno_screen.dart';
@@ -20,7 +21,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class HomeScreenState extends State<HomeScreen> {
-  late Future<Map<String, double>> _dadosDoDiaFuture;
+  late Future<Map<String, dynamic>> _dadosDoDiaFuture;
 
   @override
   void initState() {
@@ -28,7 +29,7 @@ class HomeScreenState extends State<HomeScreen> {
     _dadosDoDiaFuture = _carregarDadosDoDia();
   }
 
-  Future<Map<String, double>> _carregarDadosDoDia() async {
+  Future<Map<String, dynamic>> _carregarDadosDoDia() async {
     final hoje = DateTime.now();
 
     final results = await Future.wait([
@@ -43,52 +44,29 @@ class HomeScreenState extends State<HomeScreen> {
     final veiculo = results[2] as Veiculo;
     final itensManutencao = results[3] as List<ManutencaoItem>;
 
-    final turnosDeHoje = todosOsTurnos
-        .where((t) =>
-    t.data.year == hoje.year &&
-        t.data.month == hoje.month &&
-        t.data.day == hoje.day)
-        .toList();
-
-    final despesasDeHoje = todasAsDespesas
-        .where((d) =>
-    d.data.year == hoje.year &&
-        d.data.month == hoje.month &&
-        d.data.day == hoje.day)
-        .toList();
-
-    final custoManutencaoPorKm =
-    itensManutencao.fold(0.0, (soma, item) => soma + item.custoPorKm);
+    final turnosDeHoje = todosOsTurnos.where((t) => t.data.year == hoje.year && t.data.month == hoje.month && t.data.day == hoje.day).toList();
+    final despesasDeHoje = todasAsDespesas.where((d) => d.data.year == hoje.year && d.data.month == hoje.month && d.data.day == hoje.day).toList();
+    final custoManutencaoPorKm = itensManutencao.fold(0.0, (soma, item) => soma + item.custoPorKm);
     final custoDepreciacaoPorKm = veiculo.depreciacaoPorKm;
 
-    double ganhosBrutos = 0;
-    double kmRodados = 0;
-    double gastoCombustivel = 0;
-    double provisaoManutencao = 0;
-    double provisaoDepreciacao = 0;
-
+    double ganhosBrutos = 0, kmRodados = 0, gastoCombustivel = 0, provisaoManutencao = 0, provisaoDepreciacao = 0;
     for (final turno in turnosDeHoje) {
       ganhosBrutos += turno.ganhos;
       kmRodados += turno.kmRodados;
-
       if (veiculo.consumoMedio > 0) {
-        gastoCombustivel +=
-            (turno.kmRodados / veiculo.consumoMedio) * turno.precoCombustivel;
+        gastoCombustivel += (turno.kmRodados / veiculo.consumoMedio) * turno.precoCombustivel;
       }
       provisaoManutencao += turno.kmRodados * custoManutencaoPorKm;
       provisaoDepreciacao += turno.kmRodados * custoDepreciacaoPorKm;
     }
-
-    final totalDespesas =
-    despesasDeHoje.fold(0.0, (soma, despesa) => soma + despesa.valor);
-
-    final lucroLiquido = ganhosBrutos -
-        totalDespesas -
-        gastoCombustivel -
-        provisaoManutencao -
-        provisaoDepreciacao;
-
+    final totalDespesas = despesasDeHoje.fold(0.0, (soma, despesa) => soma + despesa.valor);
+    final lucroLiquido = ganhosBrutos - totalDespesas - gastoCombustivel - provisaoManutencao - provisaoDepreciacao;
     final reaisPorKm = (kmRodados > 0) ? ganhosBrutos / kmRodados : 0.0;
+
+    final List<ManutencaoItem> itensVencidos = itensManutencao.where((item) {
+      final kmRestantes = item.proximaTrocaKm - veiculo.kmAtual;
+      return kmRestantes <= 0;
+    }).toList();
 
     return {
       'ganhosBrutos': ganhosBrutos,
@@ -99,31 +77,31 @@ class HomeScreenState extends State<HomeScreen> {
       'provisaoDepreciacao': provisaoDepreciacao,
       'lucroLiquido': lucroLiquido,
       'reaisPorKm': reaisPorKm,
+      'itensVencidos': itensVencidos,
     };
   }
 
-  void _recarregar() {
-    setState(() {
-      _dadosDoDiaFuture = _carregarDadosDoDia();
-    });
-  }
+  // A FUNÇÃO _mostrarDialogoDeAlerta FOI REMOVIDA DAQUI
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: RefreshIndicator(
-        onRefresh: () async => _recarregar(),
-        child: FutureBuilder<Map<String, double>>(
+        onRefresh: () async {
+          setState(() {
+            _dadosDoDiaFuture = _carregarDadosDoDia();
+          });
+        },
+        child: FutureBuilder<Map<String, dynamic>>(
           future: _dadosDoDiaFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }
             if (snapshot.hasError) {
-              return Center(
-                  child: Text('Erro ao carregar dados: ${snapshot.error}'));
+              return Center(child: Text('Erro ao carregar dados: ${snapshot.error}'));
             }
-            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            if (!snapshot.hasData || snapshot.data == null) {
               return const Center(child: Text('Nenhum dado encontrado.'));
             }
 
@@ -139,23 +117,16 @@ class HomeScreenState extends State<HomeScreen> {
                     icon: const Icon(Icons.receipt_long),
                     label: const Text('Gerenciar Despesas'),
                     onPressed: () async {
-                      await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const DespesasScreen()));
-                      _recarregar();
+                      await Navigator.push(context, MaterialPageRoute(builder: (_) => const DespesasScreen()));
+                      setState(() { _dadosDoDiaFuture = _carregarDadosDoDia(); });
                     },
                   ),
                   const SizedBox(height: 8),
-                  // BOTÃO DE HISTÓRICO NO LOCAL CORRETO
                   OutlinedButton.icon(
                     icon: const Icon(Icons.history),
                     label: const Text('Ver Histórico de Turnos'),
                     onPressed: () {
-                      Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const HistoricoTurnosScreen()));
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoricoTurnosScreen()));
                     },
                   )
                 ],
@@ -166,10 +137,66 @@ class HomeScreenState extends State<HomeScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          final result = await Navigator.push(
-              context, MaterialPageRoute(builder: (_) => const TurnoScreen()));
-          if (result == true) {
-            _recarregar();
+          final scaffoldMessenger = ScaffoldMessenger.of(context);
+          final navigator = Navigator.of(context);
+
+          final result = await navigator.push(
+            MaterialPageRoute(builder: (_) => const TurnoScreen()),
+          );
+
+          if (result != true) return;
+
+          scaffoldMessenger.showSnackBar(const SnackBar(
+              content: Text("Salvando e verificando manutenções..."),
+              duration: Duration(seconds: 1)));
+
+          final novosDados = await _carregarDadosDoDia();
+
+          if (!mounted) return;
+
+          setState(() {
+            _dadosDoDiaFuture = Future.value(novosDados);
+          });
+
+          final List<ManutencaoItem> itensVencidos = novosDados['itensVencidos'];
+
+          if (itensVencidos.isNotEmpty) {
+            showDialog(
+                context: navigator.context,
+                builder: (context) => AlertDialog(
+                  title: const Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded, color: Colors.amber),
+                      SizedBox(width: 10),
+                      Text('Alerta de Manutenção'),
+                    ],
+                  ),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                          'Os seguintes itens estão com a manutenção vencida:'),
+                      const SizedBox(height: 10),
+                      ...itensVencidos.map((item) => Text('• ${item.nome}',
+                          style: const TextStyle(fontWeight: FontWeight.bold))),
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('OK'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        navigator.push(MaterialPageRoute(
+                            builder: (_) => const ManutencaoScreen()));
+                      },
+                      child: const Text('Ver Manutenções'),
+                    ),
+                  ],
+                ));
           }
         },
         backgroundColor: Colors.greenAccent,
@@ -178,8 +205,15 @@ class HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildResumoDoDiaCard(Map<String, double> dados) {
-    final lucroLiquido = dados['lucroLiquido']!;
+  Widget _buildResumoDoDiaCard(Map<String, dynamic> dados) {
+    final double ganhosBrutos = dados['ganhosBrutos'];
+    final double despesas = dados['despesas'];
+    final double gastoCombustivel = dados['gastoCombustivel'];
+    final double provisaoManutencao = dados['provisaoManutencao'];
+    final double provisaoDepreciacao = dados['provisaoDepreciacao'];
+    final double lucroLiquido = dados['lucroLiquido'];
+    final double kmRodados = dados['kmRodados'];
+    final double reaisPorKm = dados['reaisPorKm'];
 
     return Card(
       elevation: 4,
@@ -189,54 +223,29 @@ class HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Resumo Financeiro do Dia',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
+            Text('Resumo Financeiro do Dia', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
-            _buildInfoRow('💰 Ganhos Brutos',
-                AppFormatters.formatCurrency(dados['ganhosBrutos']!)),
+            _buildInfoRow('💰 Ganhos Brutos', AppFormatters.formatCurrency(ganhosBrutos)),
             const Divider(height: 20),
-            Text('Custos e Provisões do Dia:',
-                style: Theme.of(context).textTheme.titleSmall),
+            Text('Custos e Provisões do Dia:', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 8),
-            _buildInfoRow('💸 Despesas',
-                AppFormatters.formatCurrency(dados['despesas']!),
-                isNegative: true),
-            _buildInfoRow('⛽ Gasto Combustível',
-                AppFormatters.formatCurrency(dados['gastoCombustivel']!),
-                isNegative: true),
-            _buildInfoRow('🛠️ Provisão Manutenção',
-                AppFormatters.formatCurrency(dados['provisaoManutencao']!),
-                isNegative: true),
-            _buildInfoRow('🚗 Provisão Troca Veículo',
-                AppFormatters.formatCurrency(dados['provisaoDepreciacao']!),
-                isNegative: true),
+            _buildInfoRow('💸 Despesas', AppFormatters.formatCurrency(despesas), isNegative: true),
+            _buildInfoRow('⛽ Gasto Combustível', AppFormatters.formatCurrency(gastoCombustivel), isNegative: true),
+            _buildInfoRow('🛠️ Provisão Manutenção', AppFormatters.formatCurrency(provisaoManutencao), isNegative: true),
+            _buildInfoRow('🚗 Provisão Troca Veículo', AppFormatters.formatCurrency(provisaoDepreciacao), isNegative: true),
             const Divider(height: 20),
-            _buildInfoRow('✅ Lucro Líquido', AppFormatters.formatCurrency(lucroLiquido),
-                isHighlight: true, lucroValor: lucroLiquido),
+            _buildInfoRow('✅ Lucro Líquido', AppFormatters.formatCurrency(lucroLiquido), isHighlight: true, lucroValor: lucroLiquido),
             const SizedBox(height: 10),
             const Divider(height: 20),
-            _buildInfoRow('🛣️ KM Rodados no Dia',
-                AppFormatters.formatKm(dados['kmRodados']!),
-                isInformational: true),
-            _buildInfoRow('📈 R\$ por KM Rodado',
-                AppFormatters.formatCurrency(dados['reaisPorKm']!),
-                isInformational: true),
+            _buildInfoRow('🛣️ KM Rodados no Dia', AppFormatters.formatKm(kmRodados), isInformational: true),
+            _buildInfoRow('📈 R\$ por KM Rodado', AppFormatters.formatCurrency(reaisPorKm), isInformational: true),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInfoRow(String label, String value,
-      {bool isHighlight = false,
-        bool isNegative = false,
-        bool isInformational = false,
-        double? lucroValor}) {
+  Widget _buildInfoRow(String label, String value, {bool isHighlight = false, bool isNegative = false, bool isInformational = false, double? lucroValor}) {
     Color? textColor;
     FontWeight fontWeight = FontWeight.w500;
 
@@ -244,8 +253,7 @@ class HomeScreenState extends State<HomeScreen> {
       textColor = Colors.redAccent;
     } else if (isHighlight) {
       fontWeight = FontWeight.bold;
-      textColor =
-      (lucroValor ?? 0) >= 0 ? Colors.green.shade800 : Colors.redAccent;
+      textColor = (lucroValor ?? 0) >= 0 ? Colors.green.shade800 : Colors.redAccent;
     } else if (isInformational) {
       textColor = Colors.blueGrey.shade700;
       fontWeight = FontWeight.bold;
@@ -256,15 +264,10 @@ class HomeScreenState extends State<HomeScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label,
-              style: const TextStyle(fontSize: 16, color: Colors.black54)),
+          Text(label, style: const TextStyle(fontSize: 16, color: Colors.black54)),
           Text(
             value,
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: fontWeight,
-              color: textColor,
-            ),
+            style: TextStyle(fontSize: 17, fontWeight: fontWeight, color: textColor),
           ),
         ],
       ),

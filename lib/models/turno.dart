@@ -30,14 +30,15 @@ class Turno {
     };
   }
 
+  // MÉTODO ATUALIZADO PARA SER MAIS SEGURO
   factory Turno.fromMap(Map<String, dynamic> map) {
     return Turno(
-      id: map['id'],
-      data: DateTime.parse(map['data']),
-      ganhos: map['ganhos'],
-      kmRodados: map['kmRodados'],
-      corridas: map['corridas'] ?? 0,
-      precoCombustivel: map['precoCombustivel'] ?? 0.0,
+      id: map['id'] ?? '',
+      data: map['data'] != null ? DateTime.parse(map['data']) : DateTime.now(),
+      ganhos: map['ganhos']?.toDouble() ?? 0.0,
+      kmRodados: map['kmRodados']?.toDouble() ?? 0.0,
+      corridas: map['corridas']?.toInt() ?? 0,
+      precoCombustivel: map['precoCombustivel']?.toDouble() ?? 0.0,
     );
   }
 

@@ -48,13 +48,14 @@ class ManutencaoItem {
     };
   }
 
+  // MÉTODO ATUALIZADO PARA SER MAIS SEGURO
   factory ManutencaoItem.fromMap(Map<String, dynamic> map) {
     return ManutencaoItem(
-      id: map['id'],
-      nome: map['nome'],
-      custo: map['custo'],
-      vidaUtilKm: map['vidaUtilKm'],
-      kmUltimaTroca: map['kmUltimaTroca'] ?? 0,
+      id: map['id'] ?? '',
+      nome: map['nome'] ?? '',
+      custo: map['custo']?.toDouble() ?? 0.0,
+      vidaUtilKm: map['vidaUtilKm']?.toInt() ?? 0,
+      kmUltimaTroca: map['kmUltimaTroca']?.toInt() ?? 0,
       dataUltimaTroca: map['dataUltimaTroca'] != null
           ? DateTime.parse(map['dataUltimaTroca'])
           : null,

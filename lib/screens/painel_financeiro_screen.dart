@@ -1,7 +1,6 @@
 // lib/screens/painel_financeiro_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:turno_pago/models/despesa.dart'; // IMPORT ADICIONADO
 import 'package:turno_pago/models/manutencao_item.dart';
 import 'package:turno_pago/models/turno.dart';
 import 'package:turno_pago/models/veiculo.dart';
@@ -23,43 +22,50 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
   @override
   void initState() {
     super.initState();
-    _dadosPainelFuture = _carregarDadosDoPainel();
+    _carregarDados();
   }
 
-  Future<Map<String, dynamic>> _carregarDadosDoPainel() async {
+  void _carregarDados() {
+    setState(() {
+      _dadosPainelFuture = _processarDadosDoPainel();
+    });
+  }
+
+  Future<Map<String, dynamic>> _processarDadosDoPainel() async {
     final results = await Future.wait([
       DadosService.getTurnos(),
       VeiculoService.getVeiculo(),
       DadosService.getManutencaoItens(),
-      DadosService.getDespesas(),
     ]);
 
-    final turnosData = results[0] as List<Turno>;
+    final todosOsTurnos = results[0] as List<Turno>;
     final veiculoData = results[1] as Veiculo;
     final manutencaoData = results[2] as List<ManutencaoItem>;
-    final despesasData = results[3] as List<Despesa>;
 
+    // Cálculos para o cofrinho (sempre totais)
+    double totalProvisaoManutencao = 0;
+    double totalProvisaoTroca = 0;
+    final custoManutencaoPorKm = manutencaoData.fold(0.0, (soma, item) => soma + item.custoPorKm);
+    final custoDepreciacaoPorKm = veiculoData.depreciacaoPorKm;
+
+    for (final turno in todosOsTurnos) {
+      totalProvisaoManutencao += turno.kmRodados * custoManutencaoPorKm;
+      totalProvisaoTroca += turno.kmRodados * custoDepreciacaoPorKm;
+    }
+
+    // Ordena os itens de manutenção para a exibição no card
     manutencaoData.sort((a, b) {
       final kmRestantesA = a.proximaTrocaKm - veiculoData.kmAtual;
       final kmRestantesB = b.proximaTrocaKm - veiculoData.kmAtual;
       return kmRestantesA.compareTo(kmRestantesB);
     });
 
-    double ganhoTotal = turnosData.fold(0.0, (soma, t) => soma + t.ganhos);
-    double despesasTotal = despesasData.fold(0.0, (soma, d) => soma + d.valor);
-
     return {
       'veiculo': veiculoData,
       'itensManutencao': manutencaoData,
-      'ganhoTotal': ganhoTotal,
-      'despesasTotal': despesasTotal,
+      'totalProvisaoManutencao': totalProvisaoManutencao,
+      'totalProvisaoTroca': totalProvisaoTroca,
     };
-  }
-
-  void _recarregar() {
-    setState(() {
-      _dadosPainelFuture = _carregarDadosDoPainel();
-    });
   }
 
   @override
@@ -80,11 +86,11 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
 
           final dados = snapshot.data!;
           return RefreshIndicator(
-            onRefresh: () async => _recarregar(),
+            onRefresh: () async => _carregarDados(),
             child: ListView(
               padding: const EdgeInsets.all(16.0),
               children: [
-                _buildResumoGeralCard(dados),
+                _buildCofrinhoCard(dados),
                 const SizedBox(height: 16),
                 _buildMonitorManutencaoCard(
                     dados['veiculo'], dados['itensManutencao']),
@@ -96,29 +102,27 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
     );
   }
 
-  Widget _buildResumoGeralCard(Map<String, dynamic> dados) {
-    final double ganhoTotal = dados['ganhoTotal'];
-    final double despesasTotal = dados['despesasTotal'];
-    final lucroLiquido = ganhoTotal - despesasTotal;
+  Widget _buildCofrinhoCard(Map<String, dynamic> dados) {
+    final double totalManutencao = dados['totalProvisaoManutencao'];
+    final double totalTroca = dados['totalProvisaoTroca'];
+    final double totalGuardado = totalManutencao + totalTroca;
 
     return Card(
       elevation: 4,
+      color: Colors.blue.shade50,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Financeiro Geral (Todos os Tempos)',
-                style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 16),
-            _buildInfoRow('💰 Ganhos Brutos Totais:',
-                AppFormatters.formatCurrency(ganhoTotal)),
-            _buildInfoRow('💸 Despesas Totais:',
-                AppFormatters.formatCurrency(despesasTotal), isNegative: true),
-            const Divider(),
-            _buildInfoRow('✅ Lucro Líquido Total:',
-                AppFormatters.formatCurrency(lucroLiquido),
-                isHighlight: true, lucroValor: lucroLiquido),
+            Text('🐖 Cofrinho de Provisões', style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.blue.shade800)),
+            const SizedBox(height: 4),
+            Text('Total que você deveria ter guardado para o futuro.', style: Theme.of(context).textTheme.bodySmall),
+            const Divider(height: 20),
+            _buildInfoRow('🛠️ Para Manutenção:', AppFormatters.formatCurrency(totalManutencao)),
+            _buildInfoRow('🚗 Para Troca do Veículo:', AppFormatters.formatCurrency(totalTroca)),
+            const Divider(height: 20),
+            _buildInfoRow('💰 Total Guardado:', AppFormatters.formatCurrency(totalGuardado), isHighlight: true, highlightColor: Colors.blue.shade900),
           ],
         ),
       ),
@@ -141,8 +145,7 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
                 style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 16),
             if (itensCriticos.isEmpty)
-              const Center(
-                  child: Text('Nenhum item de manutenção configurado.'))
+              const Center(child: Text('Nenhum item de manutenção configurado.'))
             else
               ...itensCriticos.map((item) {
                 final kmRestantes = item.proximaTrocaKm - kmAtual;
@@ -181,7 +184,7 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
                       context,
                       MaterialPageRoute(
                           builder: (context) => const ManutencaoScreen()),
-                    ).then((_) => _recarregar());
+                    ).then((_) => _carregarDados());
                   },
                   child: const Text('Ver Detalhes'),
                 ),
@@ -193,16 +196,13 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
   }
 
   Widget _buildInfoRow(String label, String value,
-      {bool isHighlight = false, bool isNegative = false, double? lucroValor}) {
+      {bool isHighlight = false, Color? highlightColor}) {
     Color? textColor;
     FontWeight fontWeight = FontWeight.w500;
 
-    if (isNegative) {
-      textColor = Colors.redAccent;
-    } else if (isHighlight) {
+    if (isHighlight) {
       fontWeight = FontWeight.bold;
-      textColor =
-      (lucroValor ?? 0) >= 0 ? Colors.green.shade800 : Colors.redAccent;
+      textColor = highlightColor;
     }
 
     return Padding(
