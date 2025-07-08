@@ -1,6 +1,8 @@
 // lib/screens/painel_financeiro_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:turno_pago/models/despesa.dart';
 import 'package:turno_pago/models/manutencao_item.dart';
 import 'package:turno_pago/models/turno.dart';
 import 'package:turno_pago/models/veiculo.dart';
@@ -8,6 +10,7 @@ import 'package:turno_pago/screens/manutencao_screen.dart';
 import 'package:turno_pago/services/dados_service.dart';
 import 'package:turno_pago/services/veiculo_service.dart';
 import 'package:turno_pago/utils/app_formatters.dart';
+import 'package:collection/collection.dart'; // Import para agrupar dados
 
 class PainelFinanceiroScreen extends StatefulWidget {
   const PainelFinanceiroScreen({super.key});
@@ -36,24 +39,45 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
       DadosService.getTurnos(),
       VeiculoService.getVeiculo(),
       DadosService.getManutencaoItens(),
+      DadosService.getDespesas(),
     ]);
 
     final todosOsTurnos = results[0] as List<Turno>;
     final veiculoData = results[1] as Veiculo;
     final manutencaoData = results[2] as List<ManutencaoItem>;
+    final todasAsDespesas = results[3] as List<Despesa>;
 
-    // Cálculos para o cofrinho (sempre totais)
+    // LÓGICA ATUALIZADA PARA O COFRINHO
     double totalProvisaoManutencao = 0;
-    double totalProvisaoTroca = 0;
+    double totalReservaEmergencia = 0;
     final custoManutencaoPorKm = manutencaoData.fold(0.0, (soma, item) => soma + item.custoPorKm);
-    final custoDepreciacaoPorKm = veiculoData.depreciacaoPorKm;
 
+    // Calcula a provisão de manutenção total (baseada em todos os KMs rodados)
     for (final turno in todosOsTurnos) {
       totalProvisaoManutencao += turno.kmRodados * custoManutencaoPorKm;
-      totalProvisaoTroca += turno.kmRodados * custoDepreciacaoPorKm;
     }
 
-    // Ordena os itens de manutenção para a exibição no card
+    // Agrupa turnos e despesas por dia para calcular o lucro diário e a reserva
+    final turnosPorDia = groupBy(todosOsTurnos, (Turno t) => DateFormat('yyyy-MM-dd').format(t.data));
+    final despesasPorDia = groupBy(todasAsDespesas, (Despesa d) => DateFormat('yyyy-MM-dd').format(d.data));
+
+    turnosPorDia.forEach((dia, turnosDoDia) {
+      double ganhosBrutosDia = turnosDoDia.fold(0, (sum, t) => sum + t.ganhos);
+      double kmRodadosDia = turnosDoDia.fold(0, (sum, t) => sum + t.kmRodados);
+      double gastoCombustivelDia = 0;
+      if (veiculoData.consumoMedio > 0) {
+        gastoCombustivelDia = turnosDoDia.fold(0, (sum, t) => sum + ((t.kmRodados / veiculoData.consumoMedio) * t.precoCombustivel));
+      }
+      double provisaoManutencaoDia = kmRodadosDia * custoManutencaoPorKm;
+      double despesasDoDiaValor = (despesasPorDia[dia] ?? []).fold(0, (sum, d) => sum + d.valor);
+
+      double lucroLiquidoDia = ganhosBrutosDia - despesasDoDiaValor - gastoCombustivelDia - provisaoManutencaoDia;
+
+      if (lucroLiquidoDia > 0) {
+        totalReservaEmergencia += lucroLiquidoDia * (veiculoData.percentualReserva / 100);
+      }
+    });
+
     manutencaoData.sort((a, b) {
       final kmRestantesA = a.proximaTrocaKm - veiculoData.kmAtual;
       final kmRestantesB = b.proximaTrocaKm - veiculoData.kmAtual;
@@ -64,7 +88,7 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
       'veiculo': veiculoData,
       'itensManutencao': manutencaoData,
       'totalProvisaoManutencao': totalProvisaoManutencao,
-      'totalProvisaoTroca': totalProvisaoTroca,
+      'totalReservaEmergencia': totalReservaEmergencia,
     };
   }
 
@@ -104,8 +128,8 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
 
   Widget _buildCofrinhoCard(Map<String, dynamic> dados) {
     final double totalManutencao = dados['totalProvisaoManutencao'];
-    final double totalTroca = dados['totalProvisaoTroca'];
-    final double totalGuardado = totalManutencao + totalTroca;
+    final double totalReserva = dados['totalReservaEmergencia']; // NOVO VALOR
+    final double totalGuardado = totalManutencao + totalReserva;
 
     return Card(
       elevation: 4,
@@ -120,7 +144,7 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
             Text('Total que você deveria ter guardado para o futuro.', style: Theme.of(context).textTheme.bodySmall),
             const Divider(height: 20),
             _buildInfoRow('🛠️ Para Manutenção:', AppFormatters.formatCurrency(totalManutencao)),
-            _buildInfoRow('🚗 Para Troca do Veículo:', AppFormatters.formatCurrency(totalTroca)),
+            _buildInfoRow('🚨 Para Reserva de Emergência:', AppFormatters.formatCurrency(totalReserva)), // TEXTO ATUALIZADO
             const Divider(height: 20),
             _buildInfoRow('💰 Total Guardado:', AppFormatters.formatCurrency(totalGuardado), isHighlight: true, highlightColor: Colors.blue.shade900),
           ],

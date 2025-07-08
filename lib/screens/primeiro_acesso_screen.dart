@@ -1,10 +1,9 @@
 // lib/screens/primeiro_acesso_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:flutter_masked_text2/flutter_masked_text2.dart';
 import 'package:turno_pago/models/veiculo.dart';
 import 'package:turno_pago/services/veiculo_service.dart';
-import 'manutencao_screen.dart'; // Importa a tela de manutenção
+import 'manutencao_screen.dart';
 
 class PrimeiroAcessoScreen extends StatefulWidget {
   const PrimeiroAcessoScreen({super.key});
@@ -17,25 +16,21 @@ class _PrimeiroAcessoScreenState extends State<PrimeiroAcessoScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final _consumoController = TextEditingController();
-  final _valorVeiculoController = MoneyMaskedTextController(
-      leftSymbol: 'R\$ ', decimalSeparator: ',', thousandSeparator: '.');
-  final _vidaUtilController = TextEditingController();
   final _kmAtualController = TextEditingController();
+  final _percentualReservaController = TextEditingController();
 
   Future<void> _salvarEContinuar() async {
     if (_formKey.currentState!.validate()) {
       final veiculo = Veiculo(
-        consumoMedio: double.tryParse(_consumoController.text) ?? 0.0,
-        valorProximoVeiculo: _valorVeiculoController.numberValue,
-        proximaTrocaKm: int.tryParse(_vidaUtilController.text) ?? 0,
+        consumoMedio: double.tryParse(_consumoController.text) ?? 10.0,
         kmAtual: int.tryParse(_kmAtualController.text) ?? 0,
+        percentualReserva: double.tryParse(_percentualReservaController.text) ?? 10.0,
       );
 
       await VeiculoService.salvarVeiculo(veiculo);
 
       if (!mounted) return;
 
-      // MODIFICAÇÃO: Navega para a tela de manutenção em modo de configuração
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -84,16 +79,9 @@ class _PrimeiroAcessoScreenState extends State<PrimeiroAcessoScreen> {
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
-                  controller: _valorVeiculoController,
+                  controller: _percentualReservaController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Valor estimado do próximo veículo (R\$)'),
-                  validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _vidaUtilController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Próxima troca de veículo em (KM)'),
+                  decoration: const InputDecoration(labelText: 'Lucro para Reserva de Emergência (%)', hintText: 'Ex: 10 para 10%'),
                   validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null,
                 ),
                 const SizedBox(height: 32),

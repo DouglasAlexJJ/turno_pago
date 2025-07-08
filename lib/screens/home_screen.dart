@@ -47,9 +47,10 @@ class HomeScreenState extends State<HomeScreen> {
     final turnosDeHoje = todosOsTurnos.where((t) => t.data.year == hoje.year && t.data.month == hoje.month && t.data.day == hoje.day).toList();
     final despesasDeHoje = todasAsDespesas.where((d) => d.data.year == hoje.year && d.data.month == hoje.month && d.data.day == hoje.day).toList();
     final custoManutencaoPorKm = itensManutencao.fold(0.0, (soma, item) => soma + item.custoPorKm);
-    final custoDepreciacaoPorKm = veiculo.depreciacaoPorKm;
 
-    double ganhosBrutos = 0, kmRodados = 0, gastoCombustivel = 0, provisaoManutencao = 0, provisaoDepreciacao = 0;
+    // Removido o 'custoDepreciacaoPorKm' que não era mais usado
+
+    double ganhosBrutos = 0, kmRodados = 0, gastoCombustivel = 0, provisaoManutencao = 0;
     for (final turno in turnosDeHoje) {
       ganhosBrutos += turno.ganhos;
       kmRodados += turno.kmRodados;
@@ -57,10 +58,13 @@ class HomeScreenState extends State<HomeScreen> {
         gastoCombustivel += (turno.kmRodados / veiculo.consumoMedio) * turno.precoCombustivel;
       }
       provisaoManutencao += turno.kmRodados * custoManutencaoPorKm;
-      provisaoDepreciacao += turno.kmRodados * custoDepreciacaoPorKm;
     }
     final totalDespesas = despesasDeHoje.fold(0.0, (soma, despesa) => soma + despesa.valor);
-    final lucroLiquido = ganhosBrutos - totalDespesas - gastoCombustivel - provisaoManutencao - provisaoDepreciacao;
+
+    final lucroLiquido = ganhosBrutos - totalDespesas - gastoCombustivel - provisaoManutencao;
+
+    final double valorReserva = (lucroLiquido > 0) ? lucroLiquido * (veiculo.percentualReserva / 100) : 0;
+    final double lucroFinal = lucroLiquido - valorReserva;
     final reaisPorKm = (kmRodados > 0) ? ganhosBrutos / kmRodados : 0.0;
 
     final List<ManutencaoItem> itensVencidos = itensManutencao.where((item) {
@@ -74,14 +78,13 @@ class HomeScreenState extends State<HomeScreen> {
       'despesas': totalDespesas,
       'gastoCombustivel': gastoCombustivel,
       'provisaoManutencao': provisaoManutencao,
-      'provisaoDepreciacao': provisaoDepreciacao,
       'lucroLiquido': lucroLiquido,
+      'valorReserva': valorReserva,
+      'lucroFinal': lucroFinal,
       'reaisPorKm': reaisPorKm,
       'itensVencidos': itensVencidos,
     };
   }
-
-  // A FUNÇÃO _mostrarDialogoDeAlerta FOI REMOVIDA DAQUI
 
   @override
   Widget build(BuildContext context) {
@@ -137,8 +140,9 @@ class HomeScreenState extends State<HomeScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          final scaffoldMessenger = ScaffoldMessenger.of(context);
+          // CAPTURA AS REFERÊNCIAS ANTES DO 'AWAIT'
           final navigator = Navigator.of(context);
+          final scaffoldMessenger = ScaffoldMessenger.of(context);
 
           final result = await navigator.push(
             MaterialPageRoute(builder: (_) => const TurnoScreen()),
@@ -146,9 +150,11 @@ class HomeScreenState extends State<HomeScreen> {
 
           if (result != true) return;
 
+          // USA AS REFERÊNCIAS CAPTURADAS
           scaffoldMessenger.showSnackBar(const SnackBar(
-              content: Text("Salvando e verificando manutenções..."),
-              duration: Duration(seconds: 1)));
+            content: Text("Salvando e verificando manutenções..."),
+            duration: Duration(seconds: 1),
+          ));
 
           final novosDados = await _carregarDadosDoDia();
 
@@ -161,42 +167,41 @@ class HomeScreenState extends State<HomeScreen> {
           final List<ManutencaoItem> itensVencidos = novosDados['itensVencidos'];
 
           if (itensVencidos.isNotEmpty) {
+            // USA O CONTEXTO DO NAVIGATOR CAPTURADO, QUE É SEGURO
             showDialog(
-                context: navigator.context,
-                builder: (context) => AlertDialog(
-                  title: const Row(
-                    children: [
-                      Icon(Icons.warning_amber_rounded, color: Colors.amber),
-                      SizedBox(width: 10),
-                      Text('Alerta de Manutenção'),
-                    ],
-                  ),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                          'Os seguintes itens estão com a manutenção vencida:'),
-                      const SizedBox(height: 10),
-                      ...itensVencidos.map((item) => Text('• ${item.nome}',
-                          style: const TextStyle(fontWeight: FontWeight.bold))),
-                    ],
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('OK'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                        navigator.push(MaterialPageRoute(
-                            builder: (_) => const ManutencaoScreen()));
-                      },
-                      child: const Text('Ver Manutenções'),
-                    ),
+              context: navigator.context,
+              builder: (context) => AlertDialog(
+                title: const Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded, color: Colors.amber),
+                    SizedBox(width: 10),
+                    Text('Alerta de Manutenção'),
                   ],
-                ));
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Os seguintes itens estão com a manutenção vencida:'),
+                    const SizedBox(height: 10),
+                    ...itensVencidos.map((item) => Text('• ${item.nome}', style: const TextStyle(fontWeight: FontWeight.bold))),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('OK'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      navigator.push(MaterialPageRoute(builder: (_) => const ManutencaoScreen()));
+                    },
+                    child: const Text('Ver Manutenções'),
+                  ),
+                ],
+              ),
+            );
           }
         },
         backgroundColor: Colors.greenAccent,
@@ -210,8 +215,8 @@ class HomeScreenState extends State<HomeScreen> {
     final double despesas = dados['despesas'];
     final double gastoCombustivel = dados['gastoCombustivel'];
     final double provisaoManutencao = dados['provisaoManutencao'];
-    final double provisaoDepreciacao = dados['provisaoDepreciacao'];
-    final double lucroLiquido = dados['lucroLiquido'];
+    final double valorReserva = dados['valorReserva'];
+    final double lucroFinal = dados['lucroFinal'];
     final double kmRodados = dados['kmRodados'];
     final double reaisPorKm = dados['reaisPorKm'];
 
@@ -227,14 +232,14 @@ class HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 12),
             _buildInfoRow('💰 Ganhos Brutos', AppFormatters.formatCurrency(ganhosBrutos)),
             const Divider(height: 20),
-            Text('Custos e Provisões do Dia:', style: Theme.of(context).textTheme.titleSmall),
+            Text('Custos, Provisões e Reservas:', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 8),
             _buildInfoRow('💸 Despesas', AppFormatters.formatCurrency(despesas), isNegative: true),
             _buildInfoRow('⛽ Gasto Combustível', AppFormatters.formatCurrency(gastoCombustivel), isNegative: true),
             _buildInfoRow('🛠️ Provisão Manutenção', AppFormatters.formatCurrency(provisaoManutencao), isNegative: true),
-            _buildInfoRow('🚗 Provisão Troca Veículo', AppFormatters.formatCurrency(provisaoDepreciacao), isNegative: true),
+            _buildInfoRow('🚨 Reserva de Emergência', AppFormatters.formatCurrency(valorReserva), isNegative: true, negativeColor: Colors.orange.shade800),
             const Divider(height: 20),
-            _buildInfoRow('✅ Lucro Líquido', AppFormatters.formatCurrency(lucroLiquido), isHighlight: true, lucroValor: lucroLiquido),
+            _buildInfoRow('✅ Lucro Final (no bolso)', AppFormatters.formatCurrency(lucroFinal), isHighlight: true, lucroValor: lucroFinal),
             const SizedBox(height: 10),
             const Divider(height: 20),
             _buildInfoRow('🛣️ KM Rodados no Dia', AppFormatters.formatKm(kmRodados), isInformational: true),
@@ -245,12 +250,12 @@ class HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildInfoRow(String label, String value, {bool isHighlight = false, bool isNegative = false, bool isInformational = false, double? lucroValor}) {
+  Widget _buildInfoRow(String label, String value, {bool isHighlight = false, bool isNegative = false, bool isInformational = false, double? lucroValor, Color? negativeColor}) {
     Color? textColor;
     FontWeight fontWeight = FontWeight.w500;
 
     if (isNegative) {
-      textColor = Colors.redAccent;
+      textColor = negativeColor ?? Colors.redAccent;
     } else if (isHighlight) {
       fontWeight = FontWeight.bold;
       textColor = (lucroValor ?? 0) >= 0 ? Colors.green.shade800 : Colors.redAccent;
