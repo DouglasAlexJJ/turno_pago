@@ -1,16 +1,10 @@
 // lib/screens/painel_financeiro_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:turno_pago/models/despesa.dart';
-import 'package:turno_pago/models/manutencao_item.dart';
-import 'package:turno_pago/models/turno.dart';
-import 'package:turno_pago/models/veiculo.dart';
-import 'package:turno_pago/screens/manutencao_screen.dart';
 import 'package:turno_pago/services/dados_service.dart';
-import 'package:turno_pago/services/veiculo_service.dart';
 import 'package:turno_pago/utils/app_formatters.dart';
-import 'package:collection/collection.dart'; // Import para agrupar dados
+import 'package:collection/collection.dart';
 
 class PainelFinanceiroScreen extends StatefulWidget {
   const PainelFinanceiroScreen({super.key});
@@ -20,7 +14,8 @@ class PainelFinanceiroScreen extends StatefulWidget {
 }
 
 class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
-  late Future<Map<String, dynamic>> _dadosPainelFuture;
+  String _periodoSelecionado = 'semana';
+  late Future<Map<String, dynamic>> _dadosDoPeriodoFuture;
 
   @override
   void initState() {
@@ -30,203 +25,181 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
 
   void _carregarDados() {
     setState(() {
-      _dadosPainelFuture = _processarDadosDoPainel();
+      _dadosDoPeriodoFuture = _processarDadosDoPeriodo();
     });
   }
 
-  Future<Map<String, dynamic>> _processarDadosDoPainel() async {
-    final results = await Future.wait([
-      DadosService.getTurnos(),
-      VeiculoService.getVeiculo(),
-      DadosService.getManutencaoItens(),
-      DadosService.getDespesas(),
-    ]);
+  Future<Map<String, dynamic>> _processarDadosDoPeriodo() async {
+    final todosOsTurnos = await DadosService.getTurnos();
+    final todasAsDespesas = await DadosService.getDespesas();
 
-    final todosOsTurnos = results[0] as List<Turno>;
-    final veiculoData = results[1] as Veiculo;
-    final manutencaoData = results[2] as List<ManutencaoItem>;
-    final todasAsDespesas = results[3] as List<Despesa>;
+    final agora = DateTime.now();
+    DateTime inicioPeriodo;
 
-    // LÓGICA ATUALIZADA PARA O COFRINHO
-    double totalProvisaoManutencao = 0;
-    double totalReservaEmergencia = 0;
-    final custoManutencaoPorKm = manutencaoData.fold(0.0, (soma, item) => soma + item.custoPorKm);
-
-    // Calcula a provisão de manutenção total (baseada em todos os KMs rodados)
-    for (final turno in todosOsTurnos) {
-      totalProvisaoManutencao += turno.kmRodados * custoManutencaoPorKm;
+    if (_periodoSelecionado == 'semana') {
+      final diaDaSemana = agora.weekday == 7 ? 0 : agora.weekday;
+      inicioPeriodo = agora.subtract(Duration(days: diaDaSemana));
+      inicioPeriodo = DateTime(inicioPeriodo.year, inicioPeriodo.month, inicioPeriodo.day);
+    } else { // Mês
+      inicioPeriodo = DateTime(agora.year, agora.month, 1);
     }
 
-    // Agrupa turnos e despesas por dia para calcular o lucro diário e a reserva
-    final turnosPorDia = groupBy(todosOsTurnos, (Turno t) => DateFormat('yyyy-MM-dd').format(t.data));
-    final despesasPorDia = groupBy(todasAsDespesas, (Despesa d) => DateFormat('yyyy-MM-dd').format(d.data));
+    final turnosDoPeriodo = todosOsTurnos.where((t) => t.data.isAfter(inicioPeriodo));
+    final despesasDoPeriodo = todasAsDespesas.where((d) => d.data.isAfter(inicioPeriodo));
 
-    turnosPorDia.forEach((dia, turnosDoDia) {
-      double ganhosBrutosDia = turnosDoDia.fold(0, (sum, t) => sum + t.ganhos);
-      double kmRodadosDia = turnosDoDia.fold(0, (sum, t) => sum + t.kmRodados);
-      double gastoCombustivelDia = 0;
-      if (veiculoData.consumoMedio > 0) {
-        gastoCombustivelDia = turnosDoDia.fold(0, (sum, t) => sum + ((t.kmRodados / veiculoData.consumoMedio) * t.precoCombustivel));
-      }
-      double provisaoManutencaoDia = kmRodadosDia * custoManutencaoPorKm;
-      double despesasDoDiaValor = (despesasPorDia[dia] ?? []).fold(0, (sum, d) => sum + d.valor);
+    // Cálculos financeiros
+    double ganhosDoPeriodo = turnosDoPeriodo.fold(0.0, (soma, t) => soma + t.ganhos);
+    double kmRodadosPeriodo = turnosDoPeriodo.fold(0.0, (soma, t) => soma + t.kmRodados);
+    int corridasPeriodo = turnosDoPeriodo.fold(0, (soma, t) => soma + t.corridas);
 
-      double lucroLiquidoDia = ganhosBrutosDia - despesasDoDiaValor - gastoCombustivelDia - provisaoManutencaoDia;
+    // Métricas de desempenho
+    final ganhoPorKm = (kmRodadosPeriodo > 0) ? ganhosDoPeriodo / kmRodadosPeriodo : 0.0;
+    final ganhoPorCorrida = (corridasPeriodo > 0) ? ganhosDoPeriodo / corridasPeriodo : 0.0;
 
-      if (lucroLiquidoDia > 0) {
-        totalReservaEmergencia += lucroLiquidoDia * (veiculoData.percentualReserva / 100);
-      }
-    });
-
-    manutencaoData.sort((a, b) {
-      final kmRestantesA = a.proximaTrocaKm - veiculoData.kmAtual;
-      final kmRestantesB = b.proximaTrocaKm - veiculoData.kmAtual;
-      return kmRestantesA.compareTo(kmRestantesB);
-    });
+    // Agrupamento e soma das despesas por categoria
+    final despesasAgrupadas = groupBy(despesasDoPeriodo, (Despesa d) => d.categoria);
+    final Map<String, double> somaPorCategoria = despesasAgrupadas.map(
+          (categoria, lista) => MapEntry(
+        categoria,
+        lista.fold(0.0, (soma, d) => soma + d.valor),
+      ),
+    );
+    double totalDespesas = somaPorCategoria.values.fold(0.0, (soma, valor) => soma + valor);
 
     return {
-      'veiculo': veiculoData,
-      'itensManutencao': manutencaoData,
-      'totalProvisaoManutencao': totalProvisaoManutencao,
-      'totalReservaEmergencia': totalReservaEmergencia,
+      'ganhosDoPeriodo': ganhosDoPeriodo,
+      'kmRodadosPeriodo': kmRodadosPeriodo,
+      'ganhoPorKm': ganhoPorKm,
+      'ganhoPorCorrida': ganhoPorCorrida,
+      'somaPorCategoria': somaPorCategoria,
+      'totalDespesas': totalDespesas,
     };
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: FutureBuilder<Map<String, dynamic>>(
-        future: _dadosPainelFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(child: Text('Erro: ${snapshot.error}'));
-          }
-          if (!snapshot.hasData) {
-            return const Center(child: Text('Nenhum dado.'));
-          }
-
-          final dados = snapshot.data!;
-          return RefreshIndicator(
-            onRefresh: () async => _carregarDados(),
-            child: ListView(
-              padding: const EdgeInsets.all(16.0),
-              children: [
-                _buildCofrinhoCard(dados),
-                const SizedBox(height: 16),
-                _buildMonitorManutencaoCard(
-                    dados['veiculo'], dados['itensManutencao']),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: SegmentedButton<String>(
+              segments: const <ButtonSegment<String>>[
+                ButtonSegment<String>(value: 'semana', label: Text('Esta Semana'), icon: Icon(Icons.calendar_view_week)),
+                ButtonSegment<String>(value: 'mes', label: Text('Este Mês'), icon: Icon(Icons.calendar_month)),
               ],
+              selected: {_periodoSelecionado},
+              onSelectionChanged: (newSelection) {
+                setState(() {
+                  _periodoSelecionado = newSelection.first;
+                  _carregarDados();
+                });
+              },
             ),
-          );
-        },
-      ),
-    );
-  }
+          ),
+          Expanded(
+            child: FutureBuilder<Map<String, dynamic>>(
+              future: _dadosDoPeriodoFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return Center(child: Text('Erro: ${snapshot.error}'));
+                }
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const Center(child: Text('Nenhum dado no período.'));
+                }
 
-  Widget _buildCofrinhoCard(Map<String, dynamic> dados) {
-    final double totalManutencao = dados['totalProvisaoManutencao'];
-    final double totalReserva = dados['totalReservaEmergencia']; // NOVO VALOR
-    final double totalGuardado = totalManutencao + totalReserva;
+                final dados = snapshot.data!;
+                final double ganhosDoPeriodo = dados['ganhosDoPeriodo'];
+                final double totalDespesas = dados['totalDespesas'];
+                final Map<String, double> somaPorCategoria = dados['somaPorCategoria'];
 
-    return Card(
-      elevation: 4,
-      color: Colors.blue.shade50,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('🐖 Cofrinho de Provisões', style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.blue.shade800)),
-            const SizedBox(height: 4),
-            Text('Total que você deveria ter guardado para o futuro.', style: Theme.of(context).textTheme.bodySmall),
-            const Divider(height: 20),
-            _buildInfoRow('🛠️ Para Manutenção:', AppFormatters.formatCurrency(totalManutencao)),
-            _buildInfoRow('🚨 Para Reserva de Emergência:', AppFormatters.formatCurrency(totalReserva)), // TEXTO ATUALIZADO
-            const Divider(height: 20),
-            _buildInfoRow('💰 Total Guardado:', AppFormatters.formatCurrency(totalGuardado), isHighlight: true, highlightColor: Colors.blue.shade900),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMonitorManutencaoCard(
-      Veiculo veiculo, List<ManutencaoItem> itens) {
-    final kmAtual = veiculo.kmAtual;
-    final itensCriticos = itens.take(3).toList();
-
-    return Card(
-      elevation: 4,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Monitor de Manutenção',
-                style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 16),
-            if (itensCriticos.isEmpty)
-              const Center(child: Text('Nenhum item de manutenção configurado.'))
-            else
-              ...itensCriticos.map((item) {
-                final kmRestantes = item.proximaTrocaKm - kmAtual;
-                final vencido = kmRestantes <= 0;
-                final proximo =
-                    !vencido && kmRestantes < (item.vidaUtilKm * 0.1);
-                Color statusColor = vencido
-                    ? Colors.red.shade700
-                    : (proximo ? Colors.amber.shade700 : Colors.green.shade700);
-                String statusText = vencido
-                    ? '${-kmRestantes} KM VENCIDO'
-                    : 'Faltam $kmRestantes KM';
-
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                return RefreshIndicator(
+                  onRefresh: () async => _carregarDados(),
+                  child: ListView(
+                    padding: const EdgeInsets.all(16.0),
                     children: [
-                      Text(item.nome, style: const TextStyle(fontSize: 16)),
-                      Text(
-                        statusText,
-                        style: TextStyle(
-                            color: statusColor, fontWeight: FontWeight.bold),
-                      ),
+                      _buildMetricasCard(dados),
+                      const SizedBox(height: 16),
+                      _buildDespesasDetalhadasCard(somaPorCategoria, ganhosDoPeriodo, totalDespesas),
                     ],
                   ),
                 );
-              }),
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetricasCard(Map<String, dynamic> dados) {
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Métricas de Desempenho', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 16),
-            if (itensCriticos.isNotEmpty)
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) => const ManutencaoScreen()),
-                    ).then((_) => _carregarDados());
-                  },
-                  child: const Text('Ver Detalhes'),
-                ),
-              ),
+            _buildInfoRow('🛣️ KM Rodados no Período:', AppFormatters.formatKm(dados['kmRodadosPeriodo'])),
+            _buildInfoRow('📈 Ganhos por KM:', AppFormatters.formatCurrency(dados['ganhoPorKm'])),
+            _buildInfoRow('🏁 Média por Corrida:', AppFormatters.formatCurrency(dados['ganhoPorCorrida'])),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInfoRow(String label, String value,
-      {bool isHighlight = false, Color? highlightColor}) {
+  Widget _buildDespesasDetalhadasCard(Map<String, double> somaPorCategoria, double ganhos, double totalDespesas) {
+    final sortedEntries = somaPorCategoria.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Resumo Financeiro', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 16),
+            _buildInfoRow('💰 Ganhos Brutos:', AppFormatters.formatCurrency(ganhos)),
+            const Divider(),
+            if (sortedEntries.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8.0),
+                child: Text('Nenhuma despesa registrada no período.'),
+              )
+            else
+              ...sortedEntries.map((entry) {
+                return _buildInfoRow('💸 ${entry.key}:', AppFormatters.formatCurrency(entry.value), isNegative: true);
+              }),
+            const Divider(),
+            _buildInfoRow(
+                '✅ Lucro Líquido:',
+                AppFormatters.formatCurrency(ganhos - totalDespesas),
+                isHighlight: true,
+                lucroValor: ganhos - totalDespesas
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value, {bool isHighlight = false, bool isNegative = false, double? lucroValor}) {
     Color? textColor;
     FontWeight fontWeight = FontWeight.w500;
 
-    if (isHighlight) {
+    if (isNegative) {
+      textColor = Colors.redAccent;
+    } else if (isHighlight) {
       fontWeight = FontWeight.bold;
-      textColor = highlightColor;
+      textColor = (lucroValor ?? 0) >= 0 ? Colors.green.shade800 : Colors.redAccent;
     }
 
     return Padding(
@@ -234,8 +207,7 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label,
-              style: const TextStyle(fontSize: 16, color: Colors.black54)),
+          Text(label, style: const TextStyle(fontSize: 16, color: Colors.black54)),
           Text(
             value,
             style: TextStyle(

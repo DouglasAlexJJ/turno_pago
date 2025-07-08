@@ -85,7 +85,7 @@ class ConfigScreenState extends State<ConfigScreen> {
                       TextFormField(
                         controller: _percentualReservaController,
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Lucro para Reserva de Emergência (%)'),
+                        decoration: const InputDecoration(labelText: 'Lucro diário para Reserva de Emergência (%)'),
                         validator: (value) => value!.isEmpty ? 'Informe o percentual' : null,
                       ),
                       const SizedBox(height: 20),

@@ -1,8 +1,9 @@
 // lib/screens/main_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:turno_pago/screens/config_screen.dart'; // Importa a tela de config
+import 'package:turno_pago/screens/config_screen.dart';
 import 'package:turno_pago/screens/home_screen.dart';
+import 'package:turno_pago/screens/monitor_screen.dart'; // IMPORT DA NOVA TELA
 import 'package:turno_pago/screens/painel_financeiro_screen.dart';
 
 class MainScreen extends StatefulWidget {
@@ -15,9 +16,17 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _indiceSelecionado = 0;
 
+  // TÍTULOS E TELAS ATUALIZADOS
+  static const List<String> _titulos = <String>[
+    'Resumo do Dia',
+    'Painel Financeiro',
+    'Monitor e Provisões',
+  ];
+
   static const List<Widget> _telas = <Widget>[
     HomeScreen(),
     PainelFinanceiroScreen(),
+    MonitorScreen(),
   ];
 
   void _aoTocarNoItem(int index) {
@@ -29,9 +38,8 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Adicionamos uma AppBar aqui para o botão de Configurações
       appBar: AppBar(
-        title: Text(_indiceSelecionado == 0 ? 'Resumo do Dia' : 'Painel Financeiro'),
+        title: Text(_titulos.elementAt(_indiceSelecionado)), // Título dinâmico
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
@@ -47,19 +55,23 @@ class _MainScreenState extends State<MainScreen> {
       body: Center(
         child: _telas.elementAt(_indiceSelecionado),
       ),
+      // BARRA DE NAVEGAÇÃO COM 3 ITENS
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
-            icon: Icon(Icons.home),
+            icon: Icon(Icons.today),
             label: 'Resumo',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.bar_chart),
             label: 'Painel',
           ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.shield_outlined),
+            label: 'Monitor',
+          ),
         ],
         currentIndex: _indiceSelecionado,
-        selectedItemColor: Colors.amber[800],
         onTap: _aoTocarNoItem,
       ),
     );

@@ -1,10 +1,11 @@
 // lib/screens/despesas_screen.dart
 
 import 'package:flutter/material.dart';
-import '../models/despesa.dart';
-import '../services/dados_service.dart';
+import 'package:intl/intl.dart';
+import 'package:turno_pago/models/despesa.dart';
+import 'package:turno_pago/services/dados_service.dart';
+import 'package:turno_pago/utils/app_formatters.dart';
 import 'add_despesa_screen.dart';
-import 'package:intl/intl.dart'; // Para formatar a data
 
 class DespesasScreen extends StatefulWidget {
   const DespesasScreen({super.key});
@@ -19,74 +20,81 @@ class DespesasScreenState extends State<DespesasScreen> {
   @override
   void initState() {
     super.initState();
-    _reloadDespesas();
+    _carregarDespesas();
   }
 
-  void _reloadDespesas() {
+  void _carregarDespesas() {
     setState(() {
-      _despesasFuture = DadosService.getDespesas();
+      _despesasFuture = DadosService.getDespesas().then((despesas) {
+        despesas.sort((a, b) => b.data.compareTo(a.data));
+        return despesas;
+      });
     });
   }
 
-  Future<void> _removerDespesa(String id) async {
-    // Confirmação opcional
-    final confirmado = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirmar Exclusão'),
-        content: const Text('Tem certeza que deseja apagar esta despesa?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Apagar')),
-        ],
+  // NOVA FUNÇÃO PARA NAVEGAR PARA A EDIÇÃO
+  void _navegarParaEditarDespesa(Despesa despesa) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddDespesaScreen(despesaParaEditar: despesa),
       ),
     );
+    if (result == true) {
+      _carregarDespesas();
+    }
+  }
 
-    if (confirmado == true) {
-      await DadosService.removerDespesa(id);
-      _reloadDespesas(); // Recarrega a lista
+  void _navegarParaAddDespesa() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AddDespesaScreen()),
+    );
+    if (result == true) {
+      _carregarDespesas();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Controle de Despesas')),
+      appBar: AppBar(title: const Text('Despesas')),
       body: FutureBuilder<List<Despesa>>(
         future: _despesasFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
+          if (snapshot.hasError) {
+            return const Center(child: Text('Erro ao carregar despesas.'));
+          }
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return const Center(child: Text('Nenhuma despesa registrada.'));
           }
 
           final despesas = snapshot.data!;
-          // Ordena as despesas pela data mais recente primeiro
-          despesas.sort((a, b) => b.data.compareTo(a.data));
 
           return ListView.builder(
             itemCount: despesas.length,
             itemBuilder: (context, index) {
               final despesa = despesas[index];
               return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: ListTile(
-                  title: Text(despesa.descricao),
-                  subtitle: Text('${despesa.categoria} - ${DateFormat('dd/MM/yy').format(despesa.data)}'),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'R\$ ${despesa.valor.toStringAsFixed(2)}',
-                        style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, color: Colors.grey),
-                        onPressed: () => _removerDespesa(despesa.id),
-                      ),
-                    ],
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                // ENVOLVIDO COM INKWELL PARA SER CLICÁVEL
+                child: InkWell(
+                  onTap: () => _navegarParaEditarDespesa(despesa),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      child: Icon(_getIconForCategory(despesa.categoria)),
+                    ),
+                    title: Text(despesa.descricao),
+                    subtitle: Text(
+                        '${despesa.categoria} - ${DateFormat('dd/MM/yyyy').format(despesa.data)}'),
+                    trailing: Text(
+                      AppFormatters.formatCurrency(despesa.valor),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, color: Colors.redAccent),
+                    ),
                   ),
                 ),
               );
@@ -95,17 +103,26 @@ class DespesasScreenState extends State<DespesasScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final result = await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const AddDespesaScreen()),
-          );
-          if (result == true) {
-            _reloadDespesas(); // Recarrega a lista se uma nova despesa foi adicionada
-          }
-        },
+        onPressed: _navegarParaAddDespesa,
         child: const Icon(Icons.add),
       ),
     );
+  }
+
+  IconData _getIconForCategory(String category) {
+    switch (category) {
+      case 'Combustível':
+        return Icons.local_gas_station;
+      case 'Alimentação':
+        return Icons.restaurant;
+      case 'Manutenção':
+        return Icons.build;
+      case 'Lavagem':
+        return Icons.local_car_wash;
+      case 'Pedágio':
+        return Icons.signpost;
+      default:
+        return Icons.receipt_long;
+    }
   }
 }

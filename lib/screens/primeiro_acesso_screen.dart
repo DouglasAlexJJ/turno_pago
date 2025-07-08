@@ -81,7 +81,7 @@ class _PrimeiroAcessoScreenState extends State<PrimeiroAcessoScreen> {
                 TextFormField(
                   controller: _percentualReservaController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Lucro para Reserva de Emergência (%)', hintText: 'Ex: 10 para 10%'),
+                  decoration: const InputDecoration(labelText: 'Lucro diário para Reserva de Emergência (%)', hintText: 'Ex: 10 para 10%'),
                   validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null,
                 ),
                 const SizedBox(height: 32),
