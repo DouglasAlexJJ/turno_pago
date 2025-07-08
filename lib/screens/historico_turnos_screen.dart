@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:turno_pago/widgets/dica_arrastar.dart';
 import 'package:turno_pago/models/turno.dart';
 import 'package:turno_pago/screens/add_turno_passado_screen.dart';
 import 'package:turno_pago/services/dados_service.dart';
@@ -32,11 +33,6 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
     });
   }
 
-  Future<void> _removerTurno(String id) async {
-    // ... (código de remoção continua o mesmo)
-  }
-
-  // NOVA FUNÇÃO PARA EDITAR
   void _navegarParaEditarTurno(Turno turno) async {
     final result = await Navigator.push(
       context,
@@ -83,40 +79,83 @@ class _HistoricoTurnosScreenState extends State<HistoricoTurnosScreen> {
             );
           }
 
-          final turnos = snapshot.data!;
+          var turnos = snapshot.data!;
 
-          return ListView.builder(
-            itemCount: turnos.length,
-            itemBuilder: (context, index) {
-              final turno = turnos[index];
-              return Card(
-                margin:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                // ENVOLVIDO COM INKWELL
-                child: InkWell(
-                  onTap: () => _navegarParaEditarTurno(turno),
-                  child: ListTile(
-                    contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    leading: const CircleAvatar(
-                      child: Icon(Icons.calendar_month),
-                    ),
-                    title: Text(
-                      'Data: ${DateFormat('dd/MM/yyyy').format(turno.data)}',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text(
-                      'Ganhos: ${AppFormatters.formatCurrency(turno.ganhos)} | KM: ${AppFormatters.formatKm(turno.kmRodados)}',
-                    ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete_forever,
-                          color: Colors.redAccent),
-                      onPressed: () => _removerTurno(turno.id),
-                    ),
-                  ),
+          return Column(
+            children: [
+              if (turnos.isNotEmpty) const DicaArrastar(),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: turnos.length,
+                  itemBuilder: (context, index) {
+                    final turno = turnos[index];
+                    return Dismissible(
+                      key: Key(turno.id),
+                      direction: DismissDirection.endToStart,
+                      onDismissed: (direction) {
+                        final turnoRemovido = turnos[index];
+                        final int itemIndex = index;
+
+                        setState(() {
+                          turnos.removeAt(index);
+                        });
+
+                        ScaffoldMessenger.of(context).clearSnackBars();
+                        ScaffoldMessenger.of(context)
+                            .showSnackBar(
+                          SnackBar(
+                            content: Text(
+                                "Turno de ${DateFormat('dd/MM/yyyy').format(turno.data)} removido."),
+                            action: SnackBarAction(
+                              label: "Desfazer",
+                              onPressed: () {
+                                setState(() {
+                                  turnos.insert(itemIndex, turnoRemovido);
+                                });
+                              },
+                            ),
+                          ),
+                        )
+                            .closed
+                            .then((reason) {
+                          if (reason != SnackBarClosedReason.action) {
+                            DadosService.removerTurno(turnoRemovido.id);
+                          }
+                        });
+                      },
+                      background: Container(
+                        color: Colors.red,
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: const Icon(Icons.delete, color: Colors.white),
+                      ),
+                      child: Card(
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        child: InkWell(
+                          onTap: () => _navegarParaEditarTurno(turno),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                            leading: const CircleAvatar(
+                              child: Icon(Icons.calendar_month),
+                            ),
+                            title: Text(
+                              'Data: ${DateFormat('dd/MM/yyyy').format(turno.data)}',
+                              style:
+                              const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: Text(
+                              'Ganhos: ${AppFormatters.formatCurrency(turno.ganhos)} | KM: ${AppFormatters.formatKm(turno.kmRodados)}',
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
+              ),
+            ],
           );
         },
       ),

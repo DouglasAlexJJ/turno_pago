@@ -8,7 +8,7 @@ import '../models/despesa.dart';
 import '../services/dados_service.dart';
 
 class AddDespesaScreen extends StatefulWidget {
-  final Despesa? despesaParaEditar; // ACEITA UMA DESPESA PARA EDIÇÃO
+  final Despesa? despesaParaEditar;
 
   const AddDespesaScreen({super.key, this.despesaParaEditar});
 
@@ -40,7 +40,6 @@ class AddDespesaScreenState extends State<AddDespesaScreen> {
   @override
   void initState() {
     super.initState();
-    // Se estiver editando, preenche os campos com os dados existentes
     if (_isEditing) {
       final despesa = widget.despesaParaEditar!;
       _descricaoController.text = despesa.descricao;
@@ -70,7 +69,6 @@ class AddDespesaScreenState extends State<AddDespesaScreen> {
 
     if (_formKey.currentState!.validate()) {
       final despesaProcessada = Despesa(
-        // Usa o ID existente se estiver editando, ou cria um novo se não estiver
         id: widget.despesaParaEditar?.id ?? const Uuid().v4(),
         descricao: _descricaoController.text,
         valor: _valorController.numberValue,
@@ -89,6 +87,33 @@ class AddDespesaScreenState extends State<AddDespesaScreen> {
     }
   }
 
+  // NOVA FUNÇÃO PARA EXCLUIR
+  Future<void> _excluirDespesa() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmar Exclusão'),
+        content: Text('Tem certeza que deseja excluir a despesa "${widget.despesaParaEditar!.descricao}"?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar == true) {
+      await DadosService.removerDespesa(widget.despesaParaEditar!.id);
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    }
+  }
+
   @override
   void dispose() {
     _descricaoController.dispose();
@@ -100,7 +125,18 @@ class AddDespesaScreenState extends State<AddDespesaScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(_isEditing ? 'Editar Despesa' : 'Adicionar Despesa')),
+      appBar: AppBar(
+        title: Text(_isEditing ? 'Editar Despesa' : 'Adicionar Despesa'),
+        // BOTÃO DE EXCLUIR ADICIONADO
+        actions: [
+          if (_isEditing)
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.red),
+              onPressed: _excluirDespesa,
+              tooltip: 'Excluir Despesa',
+            )
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Form(

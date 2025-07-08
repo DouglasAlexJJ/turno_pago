@@ -62,6 +62,7 @@ class DadosService {
     }
   }
 
+  // NOVA FUNÇÃO PARA REMOVER DESPESA
   static Future<void> removerDespesa(String id) async {
     final despesas = await getDespesas();
     despesas.removeWhere((d) => d.id == id);
@@ -99,7 +100,6 @@ class DadosService {
     await _salvarListaManutencao(itens);
   }
 
-  // LÓGICA DA LISTA PADRÃO ADICIONADA DE VOLTA
   static Future<List<ManutencaoItem>> getManutencaoItens() async {
     final prefs = await SharedPreferences.getInstance();
     final String? itensJson = prefs.getString(_manutencaoKey);
@@ -111,8 +111,6 @@ class DadosService {
       itens = itensMap.map((map) => ManutencaoItem.fromMap(map)).toList();
     }
 
-    // Se a lista estiver vazia (primeiro acesso a esta funcionalidade),
-    // criamos e salvamos uma lista padrão.
     if (itens.isEmpty) {
       itens = [
         ManutencaoItem(id: 'pneu', nome: 'Pneus', custo: 1600, vidaUtilKm: 40000),
@@ -120,7 +118,6 @@ class DadosService {
         ManutencaoItem(id: 'pastilha', nome: 'Pastilhas de Freio', custo: 300, vidaUtilKm: 30000),
         ManutencaoItem(id: 'correia', nome: 'Correia Dentada e Tensor', custo: 600, vidaUtilKm: 50000),
       ];
-      // Salva a lista padrão para que ela seja carregada nas próximas vezes
       await _salvarListaManutencao(itens);
     }
 

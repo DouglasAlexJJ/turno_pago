@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:turno_pago/widgets/dica_arrastar.dart';
 import 'package:turno_pago/models/despesa.dart';
 import 'package:turno_pago/services/dados_service.dart';
 import 'package:turno_pago/utils/app_formatters.dart';
@@ -32,7 +33,6 @@ class DespesasScreenState extends State<DespesasScreen> {
     });
   }
 
-  // NOVA FUNÇÃO PARA NAVEGAR PARA A EDIÇÃO
   void _navegarParaEditarDespesa(Despesa despesa) async {
     final result = await Navigator.push(
       context,
@@ -72,33 +72,81 @@ class DespesasScreenState extends State<DespesasScreen> {
             return const Center(child: Text('Nenhuma despesa registrada.'));
           }
 
-          final despesas = snapshot.data!;
+          var despesas = snapshot.data!;
 
-          return ListView.builder(
-            itemCount: despesas.length,
-            itemBuilder: (context, index) {
-              final despesa = despesas[index];
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                // ENVOLVIDO COM INKWELL PARA SER CLICÁVEL
-                child: InkWell(
-                  onTap: () => _navegarParaEditarDespesa(despesa),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      child: Icon(_getIconForCategory(despesa.categoria)),
-                    ),
-                    title: Text(despesa.descricao),
-                    subtitle: Text(
-                        '${despesa.categoria} - ${DateFormat('dd/MM/yyyy').format(despesa.data)}'),
-                    trailing: Text(
-                      AppFormatters.formatCurrency(despesa.valor),
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, color: Colors.redAccent),
-                    ),
-                  ),
+          return Column(
+            children: [
+              if (despesas.isNotEmpty) const DicaArrastar(),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: despesas.length,
+                  itemBuilder: (context, index) {
+                    final despesa = despesas[index];
+                    return Dismissible(
+                      key: Key(despesa.id),
+                      direction: DismissDirection.endToStart,
+                      onDismissed: (direction) {
+                        final despesaRemovida = despesas[index];
+                        final int itemIndex = index;
+
+                        setState(() {
+                          despesas.removeAt(index);
+                        });
+
+                        ScaffoldMessenger.of(context).clearSnackBars();
+                        ScaffoldMessenger.of(context)
+                            .showSnackBar(
+                          SnackBar(
+                            content: Text("${despesa.descricao} removida."),
+                            action: SnackBarAction(
+                              label: "Desfazer",
+                              onPressed: () {
+                                setState(() {
+                                  despesas.insert(itemIndex, despesaRemovida);
+                                });
+                              },
+                            ),
+                          ),
+                        )
+                            .closed
+                            .then((reason) {
+                          if (reason != SnackBarClosedReason.action) {
+                            DadosService.removerDespesa(despesaRemovida.id);
+                          }
+                        });
+                      },
+                      background: Container(
+                        color: Colors.red,
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: const Icon(Icons.delete, color: Colors.white),
+                      ),
+                      child: Card(
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 6),
+                        child: InkWell(
+                          onTap: () => _navegarParaEditarDespesa(despesa),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              child: Icon(_getIconForCategory(despesa.categoria)),
+                            ),
+                            title: Text(despesa.descricao),
+                            subtitle: Text(
+                                '${despesa.categoria} - ${DateFormat('dd/MM/yyyy').format(despesa.data)}'),
+                            trailing: Text(
+                              AppFormatters.formatCurrency(despesa.valor),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.redAccent),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
+              ),
+            ],
           );
         },
       ),
