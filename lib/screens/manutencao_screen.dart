@@ -41,7 +41,6 @@ class ManutencaoScreenState extends State<ManutencaoScreen> {
     });
   }
 
-  // MÉTODO CORRIGIDO
   Future<void> _registrarTroca(ManutencaoItem item) async {
     final kmController =
     TextEditingController(text: _veiculo?.kmAtual.toString() ?? '');
@@ -87,16 +86,13 @@ class ManutencaoScreenState extends State<ManutencaoScreen> {
     if (confirmar == true) {
       final kmAtual = int.parse(kmController.text);
 
-      // Cria uma nova instância do item com os dados atualizados
       final itemAtualizado = item.copyWith(
         kmUltimaTroca: kmAtual,
         dataUltimaTroca: DateTime.now(),
       );
-      // Salva o item atualizado
       await DadosService.salvarManutencaoItem(itemAtualizado);
 
       if (_veiculo != null) {
-        // Salva a KM atual do veículo
         await VeiculoService.salvarVeiculo(
             _veiculo!.copyWith(kmAtual: kmAtual));
       }
@@ -198,14 +194,39 @@ class ManutencaoScreenState extends State<ManutencaoScreen> {
                 return Dismissible(
                   key: Key(item.id),
                   direction: DismissDirection.endToStart,
+                  // LÓGICA DE EXCLUSÃO COM "DESFAZER"
                   onDismissed: (direction) {
-                    DadosService.removerManutencaoItem(item.id);
+                    // Guarda o item e sua posição antes de remover
+                    final itemRemovido = _itens[index];
+                    final int itemIndex = index;
+
+                    // Remove o item da lista visualmente
                     setState(() {
                       _itens.removeAt(index);
                     });
+
+                    // Limpa qualquer notificação anterior e mostra a nova com a opção de desfazer
+                    ScaffoldMessenger.of(context).clearSnackBars();
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text("${item.nome} removido.")),
-                    );
+                      SnackBar(
+                        content: Text("${item.nome} removido."),
+                        action: SnackBarAction(
+                          label: "Desfazer",
+                          onPressed: () {
+                            // Se desfazer for pressionado, reinsere o item na lista
+                            setState(() {
+                              _itens.insert(itemIndex, itemRemovido);
+                            });
+                          },
+                        ),
+                      ),
+                    ).closed.then((reason) {
+                      // Se a notificação fechar sem que "Desfazer" seja clicado,
+                      // então remove permanentemente do banco de dados.
+                      if (reason != SnackBarClosedReason.action) {
+                        DadosService.removerManutencaoItem(itemRemovido.id);
+                      }
+                    });
                   },
                   background: Container(
                     color: Colors.red,
