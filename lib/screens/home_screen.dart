@@ -1,6 +1,7 @@
 // lib/screens/home_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:turno_pago/models/despesa.dart';
 import 'package:turno_pago/models/manutencao_item.dart';
 import 'package:turno_pago/models/turno.dart';
@@ -9,12 +10,15 @@ import 'package:turno_pago/screens/historico_turnos_screen.dart';
 import 'package:turno_pago/screens/manutencao_screen.dart';
 import 'package:turno_pago/utils/app_formatters.dart';
 import 'despesas_screen.dart';
-import 'turno_screen.dart';
+import 'turno_ativo_screen.dart';
 import '../services/dados_service.dart';
 import '../services/veiculo_service.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  // NOVO PARÂMETRO: Controla a verificação no início
+  final bool verificarTurnoAoIniciar;
+
+  const HomeScreen({super.key, this.verificarTurnoAoIniciar = true});
 
   @override
   HomeScreenState createState() => HomeScreenState();
@@ -22,13 +26,38 @@ class HomeScreen extends StatefulWidget {
 
 class HomeScreenState extends State<HomeScreen> {
   late Future<Map<String, dynamic>> _dadosDoDiaFuture;
+  final service = FlutterBackgroundService();
 
   @override
   void initState() {
     super.initState();
-    _dadosDoDiaFuture = _carregarDadosDoDia();
+    _recarregarDados();
+
+    // A verificação agora depende do novo parâmetro
+    if (widget.verificarTurnoAoIniciar) {
+      _verificarTurnoAtivo();
+    }
   }
 
+  void _verificarTurnoAtivo() async {
+    bool isRunning = await service.isRunning();
+    if (isRunning) {
+      if(mounted) {
+        Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const TurnoAtivoScreen())
+        );
+      }
+    }
+  }
+
+  void _recarregarDados() {
+    setState(() {
+      _dadosDoDiaFuture = _carregarDadosDoDia();
+    });
+  }
+
+  // O resto do arquivo permanece EXATAMENTE O MESMO...
+  // ... (código de _carregarDadosDoDia, _iniciarNovoTurno, build, etc)
   Future<Map<String, dynamic>> _carregarDadosDoDia() async {
     final hoje = DateTime.now();
 
@@ -59,41 +88,58 @@ class HomeScreenState extends State<HomeScreen> {
     }
     final totalDespesas = despesasDeHoje.fold(0.0, (soma, despesa) => soma + despesa.valor);
 
-    // LÓGICA CORRIGIDA: Gasto com combustível não é mais subtraído aqui
     final lucroLiquido = ganhosBrutos - totalDespesas - provisaoManutencao;
 
     final double valorReserva = (lucroLiquido > 0) ? lucroLiquido * (veiculo.percentualReserva / 100) : 0;
     final double lucroFinal = lucroLiquido - valorReserva;
     final reaisPorKm = (kmRodados > 0) ? ganhosBrutos / kmRodados : 0.0;
 
-    final List<ManutencaoItem> itensVencidos = itensManutencao.where((item) {
-      final kmRestantes = item.proximaTrocaKm - veiculo.kmAtual;
-      return kmRestantes <= 0;
-    }).toList();
-
     return {
       'ganhosBrutos': ganhosBrutos,
       'kmRodados': kmRodados,
       'despesas': totalDespesas,
-      'gastoCombustivel': gastoCombustivel, // Mantém para exibição
+      'gastoCombustivel': gastoCombustivel,
       'provisaoManutencao': provisaoManutencao,
       'lucroLiquido': lucroLiquido,
       'valorReserva': valorReserva,
       'lucroFinal': lucroFinal,
       'reaisPorKm': reaisPorKm,
-      'itensVencidos': itensVencidos,
     };
+  }
+
+  void _iniciarNovoTurno() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const TurnoAtivoScreen()),
+    );
+    if (result == true) {
+      _recarregarDados();
+    }
+  }
+
+  void _abrirTelaManutencao() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ManutencaoScreen()),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: const Text("Resumo do Dia"),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.build_outlined),
+            onPressed: _abrirTelaManutencao,
+            tooltip: 'Manutenção',
+          ),
+        ],
+      ),
       body: RefreshIndicator(
-        onRefresh: () async {
-          setState(() {
-            _dadosDoDiaFuture = _carregarDadosDoDia();
-          });
-        },
+        onRefresh: () async => _recarregarDados(),
         child: FutureBuilder<Map<String, dynamic>>(
           future: _dadosDoDiaFuture,
           builder: (context, snapshot) {
@@ -121,7 +167,7 @@ class HomeScreenState extends State<HomeScreen> {
                     onPressed: () async {
                       final navigator = Navigator.of(context);
                       await navigator.push(MaterialPageRoute(builder: (_) => const DespesasScreen()));
-                      setState(() { _dadosDoDiaFuture = _carregarDadosDoDia(); });
+                      _recarregarDados();
                     },
                   ),
                   const SizedBox(height: 8),
@@ -138,73 +184,11 @@ class HomeScreenState extends State<HomeScreen> {
           },
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final navigator = Navigator.of(context);
-          final scaffoldMessenger = ScaffoldMessenger.of(context);
-
-          final result = await navigator.push(
-            MaterialPageRoute(builder: (_) => const TurnoScreen()),
-          );
-
-          if (result != true) return;
-
-          scaffoldMessenger.showSnackBar(const SnackBar(
-            content: Text("Salvando e verificando manutenções..."),
-            duration: Duration(seconds: 1),
-          ));
-
-          final novosDados = await _carregarDadosDoDia();
-
-          if (!mounted) return;
-
-          setState(() {
-            _dadosDoDiaFuture = Future.value(novosDados);
-          });
-
-          final List<ManutencaoItem> itensVencidos = novosDados['itensVencidos'];
-
-          if (itensVencidos.isNotEmpty) {
-            showDialog(
-                context: navigator.context,
-                builder: (context) => AlertDialog(
-                  title: const Row(
-                    children: [
-                      Icon(Icons.warning_amber_rounded, color: Colors.amber),
-                      SizedBox(width: 10),
-                      Text('Alerta de Manutenção'),
-                    ],
-                  ),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                          'Os seguintes itens estão com a manutenção vencida:'),
-                      const SizedBox(height: 10),
-                      ...itensVencidos.map((item) => Text('• ${item.nome}',
-                          style: const TextStyle(fontWeight: FontWeight.bold))),
-                    ],
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('OK'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                        navigator.push(MaterialPageRoute(
-                            builder: (_) => const ManutencaoScreen()));
-                      },
-                      child: const Text('Ver Manutenções'),
-                    ),
-                  ],
-                ));
-          }
-        },
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _iniciarNovoTurno,
+        icon: const Icon(Icons.play_arrow),
+        label: const Text("Iniciar Turno"),
         backgroundColor: Colors.greenAccent,
-        child: const Icon(Icons.add, size: 32),
       ),
     );
   }
@@ -227,8 +211,6 @@ class HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Resumo Financeiro do Dia', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
             _buildInfoRow('💰 Ganhos Brutos', AppFormatters.formatCurrency(ganhosBrutos)),
             const Divider(height: 20),
             Text('Custos e Provisões do Dia:', style: Theme.of(context).textTheme.titleSmall),
@@ -240,7 +222,6 @@ class HomeScreenState extends State<HomeScreen> {
             _buildInfoRow('✅ Lucro Final (no bolso)', AppFormatters.formatCurrency(lucroFinal), isHighlight: true, lucroValor: lucroFinal),
             const SizedBox(height: 10),
             const Divider(height: 20),
-            // LINHA DE COMBUSTÍVEL ALTERADA
             _buildInfoRow('⛽ Combustível Gasto (Estimado)', AppFormatters.formatCurrency(gastoCombustivel), isInformational: true),
             _buildInfoRow('🛣️ KM Rodados no Dia', AppFormatters.formatKm(kmRodados), isInformational: true),
             _buildInfoRow('📈 R\$ por KM Rodado', AppFormatters.formatCurrency(reaisPorKm), isInformational: true),

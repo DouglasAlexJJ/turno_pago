@@ -15,7 +15,11 @@ class ConfigScreen extends StatefulWidget {
 class ConfigScreenState extends State<ConfigScreen> {
   final _formKey = GlobalKey<FormState>();
   final _consumoController = TextEditingController();
-  final _percentualReservaController = TextEditingController(); // NOVO CONTROLADOR
+  final _percentualReservaController = TextEditingController();
+
+  // NOVO CONTROLADOR para a quilometragem
+  final _kmAtualController = TextEditingController();
+
   late Veiculo _veiculo;
   bool _isLoading = true;
 
@@ -28,20 +32,28 @@ class ConfigScreenState extends State<ConfigScreen> {
   Future<void> _carregarDados() async {
     setState(() => _isLoading = true);
     final veiculoData = await VeiculoService.getVeiculo();
-    setState(() {
-      _veiculo = veiculoData;
-      _consumoController.text = _veiculo.consumoMedio.toString();
-      _percentualReservaController.text = _veiculo.percentualReserva.toString(); // CARREGA O NOVO DADO
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _veiculo = veiculoData;
+        _consumoController.text = _veiculo.consumoMedio.toString();
+        _percentualReservaController.text = _veiculo.percentualReserva.toString();
+
+        // CARREGA O NOVO DADO no controlador
+        _kmAtualController.text = _veiculo.kmAtual.toString(); //
+
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _salvarConfiguracoes() async {
     if (_formKey.currentState!.validate()) {
-      // Cria uma cópia do veículo atual com os novos dados do formulário
       final novoVeiculo = _veiculo.copyWith(
         consumoMedio: double.tryParse(_consumoController.text) ?? _veiculo.consumoMedio,
         percentualReserva: double.tryParse(_percentualReservaController.text) ?? _veiculo.percentualReserva,
+
+        // SALVA O NOVO DADO da quilometragem
+        kmAtual: int.tryParse(_kmAtualController.text) ?? _veiculo.kmAtual,
       );
 
       await VeiculoService.salvarVeiculo(novoVeiculo);
@@ -51,6 +63,7 @@ class ConfigScreenState extends State<ConfigScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Configurações salvas com sucesso!')),
       );
+      Navigator.of(context).pop();
     }
   }
 
@@ -74,6 +87,24 @@ class ConfigScreenState extends State<ConfigScreen> {
                     children: [
                       Text('Veículo e Finanças', style: Theme.of(context).textTheme.titleLarge),
                       const SizedBox(height: 16),
+
+                      // NOVO CAMPO para editar a quilometragem
+                      TextFormField(
+                        controller: _kmAtualController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'Quilometragem ATUAL do Veículo (km)'),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Informe a quilometragem';
+                          }
+                          if (int.tryParse(value) == null) {
+                            return 'Valor inválido';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
                       TextFormField(
                         controller: _consumoController,
                         keyboardType: TextInputType.number,
@@ -81,7 +112,7 @@ class ConfigScreenState extends State<ConfigScreen> {
                         validator: (value) => value!.isEmpty ? 'Informe o consumo' : null,
                       ),
                       const SizedBox(height: 16),
-                      // NOVO CAMPO PARA A RESERVA
+
                       TextFormField(
                         controller: _percentualReservaController,
                         keyboardType: TextInputType.number,
@@ -89,6 +120,7 @@ class ConfigScreenState extends State<ConfigScreen> {
                         validator: (value) => value!.isEmpty ? 'Informe o percentual' : null,
                       ),
                       const SizedBox(height: 20),
+
                       Center(
                         child: ElevatedButton.icon(
                           icon: const Icon(Icons.build),
@@ -96,7 +128,6 @@ class ConfigScreenState extends State<ConfigScreen> {
                           onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ManutencaoScreen())),
                         ),
                       ),
-                      // O BOTÃO DE PLANO DE TROCA FOI REMOVIDO
                     ],
                   ),
                 ),

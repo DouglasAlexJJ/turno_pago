@@ -1,6 +1,7 @@
 // lib/screens/primeiro_acesso_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:turno_pago/models/veiculo.dart';
 import 'package:turno_pago/services/veiculo_service.dart';
 import 'manutencao_screen.dart';
@@ -29,6 +30,9 @@ class _PrimeiroAcessoScreenState extends State<PrimeiroAcessoScreen> {
 
       await VeiculoService.salvarVeiculo(veiculo);
 
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('primeiro_acesso_concluido', true);
+
       if (!mounted) return;
 
       Navigator.pushReplacement(
@@ -50,7 +54,9 @@ class _PrimeiroAcessoScreenState extends State<PrimeiroAcessoScreen> {
             key: _formKey,
             child: ListView(
               children: [
-                const Icon(Icons.directions_car, size: 60, color: Colors.blue),
+                // LINHA ALTERADA: Troca o Ícone pela sua imagem
+                Image.asset('assets/images/logo_app.png', height: 80),
+
                 const SizedBox(height: 16),
                 Text(
                   'Bem-vindo ao Turno Pago!',

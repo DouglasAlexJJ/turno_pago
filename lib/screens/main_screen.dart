@@ -3,11 +3,14 @@
 import 'package:flutter/material.dart';
 import 'package:turno_pago/screens/config_screen.dart';
 import 'package:turno_pago/screens/home_screen.dart';
-import 'package:turno_pago/screens/monitor_screen.dart'; // IMPORT DA NOVA TELA
+import 'package:turno_pago/screens/monitor_screen.dart';
 import 'package:turno_pago/screens/painel_financeiro_screen.dart';
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+  // NOVO PARÂMETRO
+  final bool verificarTurnoAoIniciar;
+
+  const MainScreen({super.key, this.verificarTurnoAoIniciar = true});
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -16,17 +19,24 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _indiceSelecionado = 0;
 
-  // TÍTULOS E TELAS ATUALIZADOS
+  // A LISTA DE TELAS NÃO PODE SER MAIS 'static const'
+  late final List<Widget> _telas;
+
+  @override
+  void initState() {
+    super.initState();
+    // Inicializamos a lista aqui, passando o parâmetro para a HomeScreen
+    _telas = <Widget>[
+      HomeScreen(verificarTurnoAoIniciar: widget.verificarTurnoAoIniciar),
+      const PainelFinanceiroScreen(),
+      const MonitorScreen(),
+    ];
+  }
+
   static const List<String> _titulos = <String>[
     'Resumo do Dia',
     'Painel Financeiro',
     'Monitor e Provisões',
-  ];
-
-  static const List<Widget> _telas = <Widget>[
-    HomeScreen(),
-    PainelFinanceiroScreen(),
-    MonitorScreen(),
   ];
 
   void _aoTocarNoItem(int index) {
@@ -39,7 +49,7 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_titulos.elementAt(_indiceSelecionado)), // Título dinâmico
+        title: Text(_titulos.elementAt(_indiceSelecionado)),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
@@ -55,7 +65,6 @@ class _MainScreenState extends State<MainScreen> {
       body: Center(
         child: _telas.elementAt(_indiceSelecionado),
       ),
-      // BARRA DE NAVEGAÇÃO COM 3 ITENS
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(

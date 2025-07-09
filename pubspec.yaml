@@ -17,6 +17,11 @@ dependencies:
   intl: ^0.20.2
   flutter_masked_text2: ^0.9.1
   collection: ^1.19.1
+  flutter_background_service: ^5.1.0
+  flutter_local_notifications: ^19.3.0
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.4.0
+
 
 dev_dependencies:
   flutter_test:
@@ -27,3 +32,19 @@ dev_dependencies:
 flutter:
 
   uses-material-design: true
+  assets:
+    - assets/images/
+
+flutter_launcher_icons:
+    android: "launcher_icon"
+    ios: true
+    image_path: "assets/icon/icone_app.png"
+    min_sdk_android: 21
+    adaptive_icon_background: "#FFFFFF"
+    adaptive_icon_foreground: "assets/icon/icone_app.png"
+
+flutter_native_splash:
+   color: "#FFFFFF" # Cor de fundo da sua tela de abertura
+   image: assets/images/splash.png
+   android: true
+   ios: true
