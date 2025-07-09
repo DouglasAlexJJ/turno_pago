@@ -37,15 +37,19 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
     DateTime inicioPeriodo;
 
     if (_periodoSelecionado == 'semana') {
-      final diaDaSemana = agora.weekday == 7 ? 0 : agora.weekday;
-      inicioPeriodo = agora.subtract(Duration(days: diaDaSemana));
-      inicioPeriodo = DateTime(inicioPeriodo.year, inicioPeriodo.month, inicioPeriodo.day);
+      // --- LÓGICA ALTERADA ---
+      // Calcula o início da semana como a última Segunda-feira.
+      // (weekday retorna 1 para Segunda, 7 para Domingo)
+      inicioPeriodo = agora.subtract(Duration(days: agora.weekday - 1));
     } else { // Mês
       inicioPeriodo = DateTime(agora.year, agora.month, 1);
     }
+    // Zera o horário para pegar o dia todo
+    inicioPeriodo = DateTime(inicioPeriodo.year, inicioPeriodo.month, inicioPeriodo.day);
 
-    final turnosDoPeriodo = todosOsTurnos.where((t) => t.data.isAfter(inicioPeriodo));
-    final despesasDoPeriodo = todasAsDespesas.where((d) => d.data.isAfter(inicioPeriodo));
+
+    final turnosDoPeriodo = todosOsTurnos.where((t) => !t.data.isBefore(inicioPeriodo));
+    final despesasDoPeriodo = todasAsDespesas.where((d) => !d.data.isBefore(inicioPeriodo));
 
     // Cálculos financeiros
     double ganhosDoPeriodo = turnosDoPeriodo.fold(0.0, (soma, t) => soma + t.ganhos);
@@ -107,7 +111,7 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
                 if (snapshot.hasError) {
                   return Center(child: Text('Erro: ${snapshot.error}'));
                 }
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                if (!snapshot.hasData || (snapshot.data!['ganhosDoPeriodo'] == 0 && snapshot.data!['totalDespesas'] == 0)) {
                   return const Center(child: Text('Nenhum dado no período.'));
                 }
 
@@ -180,7 +184,7 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
               }),
             const Divider(),
             _buildInfoRow(
-                '✅ Lucro Líquido:',
+                '✅ Lucro Líquido (Ganhos - Despesas):', // Rótulo ajustado para maior clareza
                 AppFormatters.formatCurrency(ganhos - totalDespesas),
                 isHighlight: true,
                 lucroValor: ganhos - totalDespesas
@@ -207,7 +211,7 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 16, color: Colors.black54)),
+          Expanded(child: Text(label, style: const TextStyle(fontSize: 16, color: Colors.black54))),
           Text(
             value,
             style: TextStyle(
