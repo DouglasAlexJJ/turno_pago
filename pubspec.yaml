@@ -42,7 +42,7 @@ flutter_launcher_icons:
     image_path: "assets/icon/icone_app.png"
     min_sdk_android: 21
     adaptive_icon_background: "#FFFFFF"
-    adaptive_icon_foreground: "assets/icon/icone_app.png"
+    9adaptive_icon_foreground: "assets/icon/icone_app.png"
 
 flutter_native_splash:
    color: "#FFFFFF" # Cor de fundo da sua tela de abertura
