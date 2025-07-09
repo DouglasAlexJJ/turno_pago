@@ -4,14 +4,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_masked_text2/flutter_masked_text2.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:turno_pago/models/turno.dart';
 import 'package:turno_pago/models/veiculo.dart';
 import 'package:turno_pago/screens/main_screen.dart';
-import 'package:turno_pago/services/dados_service.dart';
+import 'package:turno_pago/services/dados_service.dart'; // IMPORT CORRIGIDO
 import 'package:turno_pago/services/veiculo_service.dart';
 import 'package:uuid/uuid.dart';
-import 'package:geolocator/geolocator.dart';
 
 class TurnoAtivoScreen extends StatefulWidget {
   const TurnoAtivoScreen({super.key});
@@ -37,13 +37,11 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
   Future<void> _setup() async {
     _veiculo = await VeiculoService.getVeiculo();
     bool isRunning = await service.isRunning();
-
     if (mounted) {
       setState(() {
         _isTurnoAtivo = isRunning;
         _isLoading = false;
       });
-
       if (isRunning) {
         _ouvirServico();
       }
@@ -52,7 +50,7 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
 
   void _ouvirServico() {
     service.on('update').listen((event) {
-      if(mounted) {
+      if (mounted) {
         setState(() {
           _tempoFormatado = event!['tempo'] ?? '00:00:00';
           _distanciaEmKm = event['distancia'] ?? 0.0;
@@ -62,42 +60,112 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
   }
 
   Future<void> _iniciarServicoETurno() async {
-    // Pede permissão de localização antes de iniciar
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        // Opcional: mostrar um aviso de que o GPS é necessário
         return;
       }
     }
     if (permission == LocationPermission.deniedForever) {
-      // Opcional: mostrar um aviso e sugerir ir para as configurações
       return;
     }
 
-    await service.startService();
-    if (mounted) {
-      setState(() {
-        _isTurnoAtivo = true;
-      });
-      _ouvirServico();
+    final confirmado = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Lembrete Importante'),
+        content: const Text('Você zerou o odômetro parcial (TRIP) do seu veículo?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('OK, INICIAR TURNO'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmado == true) {
+      await service.startService();
+      if (mounted) {
+        setState(() {
+          _isTurnoAtivo = true;
+        });
+        _ouvirServico();
+      }
+    }
+  }
+
+  Future<void> _cancelarTurno() async {
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancelar Turno'),
+        content: const Text('Tem certeza que deseja cancelar o turno atual? Todos os dados serão perdidos.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Não'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Sim, Cancelar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmado == true) {
+      service.invoke('stopService');
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('turno_start_time');
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const MainScreen(verificarTurnoAoIniciar: false)),
+            (Route<dynamic> route) => false,
+      );
     }
   }
 
   Future<void> _finalizarTurno() async {
     final ganhosController = MoneyMaskedTextController(
         leftSymbol: 'R\$ ', decimalSeparator: ',', thousandSeparator: '.');
-    // Pré-preenche o campo de KM com o valor calculado pelo GPS
-    final kmRodadoController = TextEditingController(text: _distanciaEmKm.toStringAsFixed(2));
-    final kmAtualVeiculoController = TextEditingController(text: _veiculo?.kmAtual.toString() ?? '0');
+    final kmRodadoController =
+    TextEditingController(text: _distanciaEmKm.toStringAsFixed(2));
+    final kmAtualVeiculoController =
+    TextEditingController(text: _veiculo?.kmAtual.toString() ?? '0');
+    final corridasController = TextEditingController();
+    final precoCombustivelController = MoneyMaskedTextController(
+        leftSymbol: 'R\$ ',
+        decimalSeparator: ',',
+        thousandSeparator: '.',
+        initialValue: _veiculo?.precoCombustivel ?? 0);
 
     final formKey = GlobalKey<FormState>();
+
+    final kmRodadoFocus = FocusNode();
+    final kmAtualFocus = FocusNode();
+    final corridasFocus = FocusNode();
+    final combustivelFocus = FocusNode();
 
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       barrierDismissible: false,
       builder: (context) {
+        void submitForm() {
+          if (formKey.currentState!.validate()) {
+            Navigator.of(context).pop({
+              'ganhos': ganhosController.numberValue,
+              'kmRodados': double.tryParse(kmRodadoController.text) ?? 0.0,
+              'kmAtual': int.tryParse(kmAtualVeiculoController.text) ?? 0,
+              'corridas': int.tryParse(corridasController.text) ?? 0,
+              'precoCombustivel': precoCombustivelController.numberValue,
+            });
+          }
+        }
+
         return AlertDialog(
           title: const Text('Finalizar Turno'),
           content: SingleChildScrollView(
@@ -106,35 +174,76 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('Tempo de Trabalho: $_tempoFormatado', style: Theme.of(context).textTheme.titleMedium),
+                  Text('Tempo de Trabalho: $_tempoFormatado',
+                      style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: ganhosController,
                     autofocus: true,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Ganhos Totais do Turno'),
-                    validator: (v) => ganhosController.numberValue <= 0 ? 'Insira um valor' : null,
+                    decoration:
+                    const InputDecoration(labelText: 'Ganhos Totais do Turno'),
+                    validator: (v) =>
+                    ganhosController.numberValue <= 0 ? 'Insira um valor' : null,
+                    textInputAction: TextInputAction.next,
+                    onEditingComplete: () =>
+                        FocusScope.of(context).requestFocus(kmRodadoFocus),
                   ),
                   TextFormField(
                     controller: kmRodadoController,
+                    focusNode: kmRodadoFocus,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'KM Rodados no Turno'),
-                    validator: (v) => (double.tryParse(v ?? '0') ?? 0) <= 0 ? 'Insira um valor' : null,
+                    decoration:
+                    const InputDecoration(labelText: 'KM Rodados no Turno'),
+                    validator: (v) =>
+                    (double.tryParse(v ?? '0') ?? 0) <= 0 ? 'Insira um valor' : null,
+                    textInputAction: TextInputAction.next,
+                    onEditingComplete: () =>
+                        FocusScope.of(context).requestFocus(kmAtualFocus),
                   ),
                   TextFormField(
-                      controller: kmAtualVeiculoController,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: 'KM Atual do Veículo',
-                        hintText: 'Última KM: ${_veiculo?.kmAtual ?? 0}',
-                      ),
-                      validator: (v) {
-                        if (v == null || v.isEmpty) return 'Campo obrigatório';
-                        final km = int.tryParse(v);
-                        if (km == null) return 'Número inválido';
-                        if (km <= (_veiculo?.kmAtual ?? 0)) return 'Deve ser maior que a última KM';
-                        return null;
-                      }
+                    controller: kmAtualVeiculoController,
+                    focusNode: kmAtualFocus,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'KM Atual do Veículo',
+                      hintText: 'Última KM: ${_veiculo?.kmAtual ?? 0}',
+                    ),
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return 'Campo obrigatório';
+                      final km = int.tryParse(v);
+                      if (km == null) return 'Número inválido';
+                      if (km <= (_veiculo?.kmAtual ?? 0))
+                        return 'Deve ser maior que a última KM';
+                      return null;
+                    },
+                    textInputAction: TextInputAction.next,
+                    onEditingComplete: () =>
+                        FocusScope.of(context).requestFocus(corridasFocus),
+                  ),
+                  TextFormField(
+                    controller: corridasController,
+                    focusNode: corridasFocus,
+                    keyboardType: TextInputType.number,
+                    decoration:
+                    const InputDecoration(labelText: 'Quantidade de Corridas'),
+                    validator: (v) =>
+                    (int.tryParse(v ?? '0') ?? 0) <= 0 ? 'Insira um valor' : null,
+                    textInputAction: TextInputAction.next,
+                    onEditingComplete: () =>
+                        FocusScope.of(context).requestFocus(combustivelFocus),
+                  ),
+                  TextFormField(
+                    controller: precoCombustivelController,
+                    focusNode: combustivelFocus,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                        labelText: 'Preço do Combustível (litro)'),
+                    validator: (v) => precoCombustivelController.numberValue <= 0
+                        ? 'Insira um valor'
+                        : null,
+                    textInputAction: TextInputAction.done,
+                    onEditingComplete: submitForm,
                   ),
                 ],
               ),
@@ -146,15 +255,7 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
               child: const Text('Cancelar'),
             ),
             ElevatedButton(
-              onPressed: () {
-                if (formKey.currentState!.validate()) {
-                  Navigator.of(context).pop({
-                    'ganhos': ganhosController.numberValue,
-                    'kmRodados': double.tryParse(kmRodadoController.text) ?? 0.0,
-                    'kmAtual': int.tryParse(kmAtualVeiculoController.text) ?? 0,
-                  });
-                }
-              },
+              onPressed: submitForm,
               child: const Text('Salvar'),
             ),
           ],
@@ -162,35 +263,38 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
       },
     );
 
+    kmRodadoFocus.dispose();
+    kmAtualFocus.dispose();
+    corridasFocus.dispose();
+    combustivelFocus.dispose();
+
     if (result != null) {
       await _salvarDados(result);
-
       service.invoke('stopService');
-
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('turno_start_time');
-
       if (!mounted) return;
-
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => const MainScreen(verificarTurnoAoIniciar: false)),
+        MaterialPageRoute(
+            builder: (context) =>
+            const MainScreen(verificarTurnoAoIniciar: false)),
             (Route<dynamic> route) => false,
       );
     }
   }
 
   Future<void> _salvarDados(Map<String, dynamic> dados) async {
-    final precoCombustivel = _veiculo?.precoCombustivel ?? 0.0;
     final novoTurno = Turno(
       id: const Uuid().v4(),
       data: DateTime.now(),
       ganhos: dados['ganhos'],
       kmRodados: dados['kmRodados'],
-      corridas: 0,
-      precoCombustivel: precoCombustivel,
+      corridas: dados['corridas'],
+      precoCombustivel: dados['precoCombustivel'],
     );
     await DadosService.adicionarTurno(novoTurno);
-    final veiculoAtualizado = _veiculo!.copyWith(kmAtual: dados['kmAtual']);
+    final veiculoAtualizado = _veiculo!.copyWith(
+        kmAtual: dados['kmAtual'], precoCombustivel: dados['precoCombustivel']);
     await VeiculoService.salvarVeiculo(veiculoAtualizado);
   }
 
@@ -217,27 +321,27 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Exibição do Tempo
-          Text(
-            'Tempo de Trabalho',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.grey.shade600),
-          ),
-          Text(
-            _tempoFormatado,
-            style: Theme.of(context).textTheme.displayLarge?.copyWith(fontWeight: FontWeight.bold, fontSize: 60),
-          ),
+          Text('Tempo de Trabalho',
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(color: Colors.grey.shade600)),
+          Text(_tempoFormatado,
+              style: Theme.of(context)
+                  .textTheme
+                  .displayLarge
+                  ?.copyWith(fontWeight: FontWeight.bold, fontSize: 60)),
           const SizedBox(height: 24),
-
-          // Exibição da Distância
-          Text(
-            'Distância Percorrida',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.grey.shade600),
-          ),
-          Text(
-            '${_distanciaEmKm.toStringAsFixed(2)} km',
-            style: Theme.of(context).textTheme.displayLarge?.copyWith(fontWeight: FontWeight.bold, fontSize: 60),
-          ),
-
+          Text('Distância Percorrida',
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(color: Colors.grey.shade600)),
+          Text('${_distanciaEmKm.toStringAsFixed(2)} km',
+              style: Theme.of(context)
+                  .textTheme
+                  .displayLarge
+                  ?.copyWith(fontWeight: FontWeight.bold, fontSize: 60)),
           const SizedBox(height: 40),
           ElevatedButton.icon(
             icon: const Icon(Icons.stop_circle_outlined),
@@ -249,6 +353,11 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
               backgroundColor: Colors.redAccent,
               foregroundColor: Colors.white,
             ),
+          ),
+          const SizedBox(height: 16),
+          TextButton(
+            onPressed: _cancelarTurno,
+            child: const Text('Cancelar Turno', style: TextStyle(color: Colors.grey)),
           ),
         ],
       ),
@@ -262,26 +371,24 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
         children: [
           const Icon(Icons.play_circle_outline, size: 100, color: Colors.green),
           const SizedBox(height: 20),
-          Text(
-            'Pronto para começar?',
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
+          Text('Pronto para começar?',
+              style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 40),
           ElevatedButton(
-              onPressed: _iniciarServicoETurno,
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 20),
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.play_arrow, size: 30),
-                  SizedBox(width: 8),
-                  Text('INICIAR', style: TextStyle(fontSize: 20)),
-                ],
-              )
+            onPressed: _iniciarServicoETurno,
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 20),
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.play_arrow, size: 30),
+                SizedBox(width: 8),
+                Text('INICIAR', style: TextStyle(fontSize: 20)),
+              ],
+            ),
           ),
         ],
       ),

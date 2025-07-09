@@ -17,28 +17,24 @@ void onStart(ServiceInstance service) async {
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
-  // Variáveis para o cálculo de distância
   double totalDistance = 0.0;
   Position? lastPosition;
   StreamSubscription<Position>? positionStream;
 
-  // Escuta por eventos da UI
   service.on('stopService').listen((event) {
-    positionStream?.cancel(); // Para o stream de GPS
+    positionStream?.cancel();
     service.stopSelf();
   });
 
-  // Salva a hora de início
   final prefs = await SharedPreferences.getInstance();
   await prefs.setInt('turno_start_time', DateTime.now().millisecondsSinceEpoch);
 
-  // Configurações do Stream de Localização
+  // CONFIGURAÇÕES DE PRECISÃO AJUSTADAS
   const LocationSettings locationSettings = LocationSettings(
-    accuracy: LocationAccuracy.high,
-    distanceFilter: 10, // Atualiza a cada 10 metros
+    accuracy: LocationAccuracy.bestForNavigation, // Máxima precisão
+    distanceFilter: 5, // Atualiza a cada 5 metros
   );
 
-  // Inicia o Stream de GPS
   positionStream = Geolocator.getPositionStream(locationSettings: locationSettings).listen((Position? position) {
     if (position != null) {
       if (lastPosition != null) {
@@ -53,7 +49,6 @@ void onStart(ServiceInstance service) async {
     }
   });
 
-  // Timer principal que atualiza a notificação e a UI
   Timer.periodic(const Duration(seconds: 1), (timer) async {
     final startTimeMillis = prefs.getInt('turno_start_time');
     if (startTimeMillis == null) return;
@@ -66,13 +61,13 @@ void onStart(ServiceInstance service) async {
     final seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
     final tempoFormatado = "$hours:$minutes:$seconds";
 
-    final distanciaKm = totalDistance / 1000; // Converte para KM
+    final distanciaKm = totalDistance / 1000;
 
-    // Mostra a notificação com tempo e distância
+    // ATUALIZAÇÃO DA NOTIFICAÇÃO CORRIGIDA
     flutterLocalNotificationsPlugin.show(
       notificationId,
-      'Tempo: $tempoFormatado', // Título agora mostra o tempo
-      'Distância: ${distanciaKm.toStringAsFixed(2)} km', // Corpo mostra a distância
+      'Turno Ativo: $tempoFormatado', // Título dinâmico para forçar atualização
+      'Distância Percorrida: ${distanciaKm.toStringAsFixed(2)} km',
       const NotificationDetails(
         android: AndroidNotificationDetails(
           notificationChannelId,
@@ -82,11 +77,11 @@ void onStart(ServiceInstance service) async {
           ongoing: true,
           showProgress: false,
           priority: Priority.low,
+          onlyAlertOnce: true, // Evita que a notificação vibre a cada segundo
         ),
       ),
     );
 
-    // Envia os dados de volta para a UI
     service.invoke('update', {
       'tempo': tempoFormatado,
       'distancia': distanciaKm,
@@ -94,7 +89,7 @@ void onStart(ServiceInstance service) async {
   });
 }
 
-// ... (O resto do arquivo 'initializeService' continua igual)
+// O resto do arquivo (initializeService) continua igual
 Future<void> initializeService() async {
   final service = FlutterBackgroundService();
 
