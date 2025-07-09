@@ -1,5 +1,5 @@
 name: turno_pago
-description: "App da empressa BAADX"
+description: "A new Flutter project."
 
 publish_to: 'none'
 version: 1.0.0+1
@@ -10,42 +10,47 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+
+  # Pacotes de produção
   shared_preferences: ^2.2.2
   cupertino_icons: ^1.0.8
-  fl_chart: ^1.0.0
   uuid: ^4.5.1
   intl: ^0.20.2
   flutter_masked_text2: ^0.9.1
   collection: ^1.19.1
-  flutter_background_service: ^5.1.0
-  flutter_local_notifications: ^19.3.0
-  flutter_launcher_icons: ^0.13.1
+  flutter_background_service: ^5.0.5
+  flutter_local_notifications: ^17.1.2
+  geolocator: ^12.0.0
   flutter_native_splash: ^2.4.0
-  geolocator: ^14.0.2
-
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
   flutter_lints: ^5.0.0
 
+  # Pacote para gerar os ícones
+  flutter_launcher_icons: ^0.13.1
+
+# Seção Flutter
 flutter:
-
   uses-material-design: true
+
+  # DECLARAÇÃO DE ASSETS CORRIGIDA E MAIS ESPECÍFICA
   assets:
-    - assets/images/
+    - assets/images/logo_app.png # Aponta para o arquivo exato
 
+# Configuração do Ícone do App
 flutter_launcher_icons:
-    android: "launcher_icon"
-    ios: true
-    image_path: "assets/icon/icone_app.png"
-    min_sdk_android: 21
-    adaptive_icon_background: "#FFFFFF"
-    9adaptive_icon_foreground: "assets/icon/icone_app.png"
+  android: true
+  ios: true
+  image_path: "assets/icon/icone_app.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icon/icone_app_foreground.png"
 
+# Configuração da Tela de Abertura (Splash Screen)
 flutter_native_splash:
-   color: "#FFFFFF" # Cor de fundo da sua tela de abertura
-   image: assets/images/splash.png
-   android: true
-   ios: true
+  color: "#FFFFFF"
+  image: assets/images/splash.png # Usa a imagem correta para o splash
+  android: true
+  ios: true

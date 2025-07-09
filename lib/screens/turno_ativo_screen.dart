@@ -9,7 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:turno_pago/models/turno.dart';
 import 'package:turno_pago/models/veiculo.dart';
 import 'package:turno_pago/screens/main_screen.dart';
-import 'package:turno_pago/services/dados_service.dart'; // IMPORT CORRIGIDO
+import 'package:turno_pago/services/dados_service.dart';
 import 'package:turno_pago/services/veiculo_service.dart';
 import 'package:uuid/uuid.dart';
 
@@ -59,15 +59,35 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
     });
   }
 
+  // FUNÇÃO ATUALIZADA COM O POPUP DE EXPLICAÇÃO
   Future<void> _iniciarServicoETurno() async {
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
+      // MOSTRA NOSSO POPUP ANTES DE PEDIR A PERMISSÃO OFICIAL
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Permissão de Localização'),
+          content: const Text(
+              "Para calcular sua distância corretamente, mesmo com o app fechado, o Turno Pago precisa de acesso à sua localização 'o tempo todo'.\n\nNa próxima tela, por favor, escolha a opção 'Permitir o tempo todo'."),
+          actions: [
+            TextButton(
+              child: const Text('ENTENDI, CONTINUAR'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
+      );
+
+      // AGORA PEDE A PERMISSÃO OFICIAL
       permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        return;
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        return; // Usuário negou, então não iniciamos o turno.
       }
     }
+
     if (permission == LocationPermission.deniedForever) {
+      // Opcional: mostrar um aviso para o usuário ir até as configurações do celular
       return;
     }
 
@@ -97,6 +117,7 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
     }
   }
 
+  // O resto do arquivo (cancelar, finalizar, salvar, build) permanece o mesmo
   Future<void> _cancelarTurno() async {
     final confirmado = await showDialog<bool>(
       context: context,
