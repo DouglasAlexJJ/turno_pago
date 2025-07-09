@@ -11,6 +11,7 @@ import 'package:turno_pago/screens/main_screen.dart';
 import 'package:turno_pago/services/dados_service.dart';
 import 'package:turno_pago/services/veiculo_service.dart';
 import 'package:uuid/uuid.dart';
+import 'package:geolocator/geolocator.dart';
 
 class TurnoAtivoScreen extends StatefulWidget {
   const TurnoAtivoScreen({super.key});
@@ -21,9 +22,9 @@ class TurnoAtivoScreen extends StatefulWidget {
 
 class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
   String _tempoFormatado = "00:00:00";
+  double _distanciaEmKm = 0.0;
   Veiculo? _veiculo;
   final service = FlutterBackgroundService();
-
   bool _isTurnoAtivo = false;
   bool _isLoading = true;
 
@@ -54,12 +55,27 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
       if(mounted) {
         setState(() {
           _tempoFormatado = event!['tempo'] ?? '00:00:00';
+          _distanciaEmKm = event['distancia'] ?? 0.0;
         });
       }
     });
   }
 
   Future<void> _iniciarServicoETurno() async {
+    // Pede permissão de localização antes de iniciar
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        // Opcional: mostrar um aviso de que o GPS é necessário
+        return;
+      }
+    }
+    if (permission == LocationPermission.deniedForever) {
+      // Opcional: mostrar um aviso e sugerir ir para as configurações
+      return;
+    }
+
     await service.startService();
     if (mounted) {
       setState(() {
@@ -72,7 +88,8 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
   Future<void> _finalizarTurno() async {
     final ganhosController = MoneyMaskedTextController(
         leftSymbol: 'R\$ ', decimalSeparator: ',', thousandSeparator: '.');
-    final kmRodadoController = TextEditingController();
+    // Pré-preenche o campo de KM com o valor calculado pelo GPS
+    final kmRodadoController = TextEditingController(text: _distanciaEmKm.toStringAsFixed(2));
     final kmAtualVeiculoController = TextEditingController(text: _veiculo?.kmAtual.toString() ?? '0');
 
     final formKey = GlobalKey<FormState>();
@@ -200,15 +217,27 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          // Exibição do Tempo
           Text(
             'Tempo de Trabalho',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.grey.shade600),
           ),
-          const SizedBox(height: 8),
           Text(
             _tempoFormatado,
-            style: Theme.of(context).textTheme.displayLarge?.copyWith(fontWeight: FontWeight.bold),
+            style: Theme.of(context).textTheme.displayLarge?.copyWith(fontWeight: FontWeight.bold, fontSize: 60),
           ),
+          const SizedBox(height: 24),
+
+          // Exibição da Distância
+          Text(
+            'Distância Percorrida',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.grey.shade600),
+          ),
+          Text(
+            '${_distanciaEmKm.toStringAsFixed(2)} km',
+            style: Theme.of(context).textTheme.displayLarge?.copyWith(fontWeight: FontWeight.bold, fontSize: 60),
+          ),
+
           const SizedBox(height: 40),
           ElevatedButton.icon(
             icon: const Icon(Icons.stop_circle_outlined),
