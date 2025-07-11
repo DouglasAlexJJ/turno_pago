@@ -1,8 +1,5 @@
 plugins {
     id("com.android.application")
-    // START: FlutterFire Configuration
-    id("com.google.gms.google-services")
-    // END: FlutterFire Configuration
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -24,7 +21,10 @@ android {
 
     defaultConfig {
         applicationId = "com.example.turno_pago"
-        minSdk = 21
+
+        // LINHA ALTERADA AQUI
+        minSdk = 23
+
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -39,7 +39,6 @@ android {
 }
 
 dependencies {
-    // VERSÃO EXATA QUE O ERRO PEDIU
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
 

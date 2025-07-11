@@ -1,33 +1,26 @@
 // lib/main.dart
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart'; // Importe o Firebase Core
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:turno_pago/firebase_options.dart'; // Importe o arquivo gerado
-import 'package:turno_pago/screens/main_screen.dart';
-import 'package:turno_pago/screens/primeiro_acesso_screen.dart';
+import 'package:turno_pago/firebase_options.dart';
+import 'package:turno_pago/screens/auth/auth_gate.dart'; // Importe o AuthGate
 import 'package:turno_pago/services/background_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // INICIALIZA O FIREBASE
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
   await initializeService();
 
-  final prefs = await SharedPreferences.getInstance();
-  final bool primeiroAcessoConcluido = prefs.getBool('primeiro_acesso_concluido') ?? false;
-
-  runApp(MyApp(primeiroAcessoConcluido: primeiroAcessoConcluido));
+  // A lógica de primeiro acesso foi removida daqui temporariamente
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  final bool primeiroAcessoConcluido;
-
-  const MyApp({super.key, required this.primeiroAcessoConcluido});
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -38,7 +31,8 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
       debugShowCheckedModeBanner: false,
-      home: primeiroAcessoConcluido ? const MainScreen() : const PrimeiroAcessoScreen(),
+      // A TELA INICIAL AGORA É O NOSSO PORTÃO DE AUTENTICAÇÃO
+      home: const AuthGate(),
     );
   }
 }
