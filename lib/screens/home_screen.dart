@@ -12,7 +12,7 @@ import 'package:turno_pago/utils/app_formatters.dart';
 import 'despesas_screen.dart';
 import 'turno_ativo_screen.dart';
 import '../services/dados_service.dart';
-import '../services/veiculo_service.dart';
+import 'package:turno_pago/services/veiculo_service.dart';
 
 class HomeScreen extends StatefulWidget {
   // NOVO PARÂMETRO: Controla a verificação no início
@@ -56,15 +56,13 @@ class HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // O resto do arquivo permanece EXATAMENTE O MESMO...
-  // ... (código de _carregarDadosDoDia, _iniciarNovoTurno, build, etc)
   Future<Map<String, dynamic>> _carregarDadosDoDia() async {
     final hoje = DateTime.now();
 
     final results = await Future.wait([
       DadosService.getTurnos(),
       DadosService.getDespesas(),
-      VeiculoService.getVeiculo(),
+      VeiculoService().getVeiculo(), // Chamada Corrigida
       DadosService.getManutencaoItens(),
     ]);
 

@@ -36,7 +36,7 @@ class _MonitorScreenState extends State<MonitorScreen> {
   Future<Map<String, dynamic>> _processarDadosDoMonitor() async {
     final results = await Future.wait([
       DadosService.getTurnos(),
-      VeiculoService.getVeiculo(),
+      VeiculoService().getVeiculo(), // Chamada Corrigida
       DadosService.getManutencaoItens(),
       DadosService.getDespesas(),
     ]);

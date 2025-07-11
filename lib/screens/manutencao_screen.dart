@@ -1,7 +1,6 @@
 // lib/screens/manutencao_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:turno_pago/models/manutencao_item.dart';
 import 'package:turno_pago/models/veiculo.dart';
 import 'package:turno_pago/screens/add_edit_manutencao_screen.dart';
@@ -33,12 +32,14 @@ class ManutencaoScreenState extends State<ManutencaoScreen> {
   Future<void> _carregarDados() async {
     setState(() => _isLoading = true);
     final itensData = await DadosService.getManutencaoItens();
-    final veiculoData = await VeiculoService.getVeiculo();
-    setState(() {
-      _itens = itensData;
-      _veiculo = veiculoData;
-      _isLoading = false;
-    });
+    final veiculoData = await VeiculoService().getVeiculo();
+    if(mounted) {
+      setState(() {
+        _itens = itensData;
+        _veiculo = veiculoData;
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _registrarTroca(ManutencaoItem item) async {
@@ -93,7 +94,7 @@ class ManutencaoScreenState extends State<ManutencaoScreen> {
       await DadosService.salvarManutencaoItem(itemAtualizado);
 
       if (_veiculo != null) {
-        await VeiculoService.salvarVeiculo(
+        await VeiculoService().salvarVeiculo(
             _veiculo!.copyWith(kmAtual: kmAtual));
       }
       _carregarDados();
@@ -120,12 +121,8 @@ class ManutencaoScreenState extends State<ManutencaoScreen> {
     }
   }
 
-  Future<void> _concluirSetup() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('primeiro_acesso_concluido', true);
-    if (!mounted) return;
-    Navigator.pushAndRemoveUntil(
-      context,
+  void _concluirSetup() {
+    Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (context) => const MainScreen()),
           (Route<dynamic> route) => false,
     );
@@ -194,18 +191,14 @@ class ManutencaoScreenState extends State<ManutencaoScreen> {
                 return Dismissible(
                   key: Key(item.id),
                   direction: DismissDirection.endToStart,
-                  // LÓGICA DE EXCLUSÃO COM "DESFAZER"
                   onDismissed: (direction) {
-                    // Guarda o item e sua posição antes de remover
                     final itemRemovido = _itens[index];
                     final int itemIndex = index;
 
-                    // Remove o item da lista visualmente
                     setState(() {
                       _itens.removeAt(index);
                     });
 
-                    // Limpa qualquer notificação anterior e mostra a nova com a opção de desfazer
                     ScaffoldMessenger.of(context).clearSnackBars();
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -213,7 +206,6 @@ class ManutencaoScreenState extends State<ManutencaoScreen> {
                         action: SnackBarAction(
                           label: "Desfazer",
                           onPressed: () {
-                            // Se desfazer for pressionado, reinsere o item na lista
                             setState(() {
                               _itens.insert(itemIndex, itemRemovido);
                             });
@@ -221,8 +213,6 @@ class ManutencaoScreenState extends State<ManutencaoScreen> {
                         ),
                       ),
                     ).closed.then((reason) {
-                      // Se a notificação fechar sem que "Desfazer" seja clicado,
-                      // então remove permanentemente do banco de dados.
                       if (reason != SnackBarClosedReason.action) {
                         DadosService.removerManutencaoItem(itemRemovido.id);
                       }

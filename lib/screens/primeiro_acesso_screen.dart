@@ -1,7 +1,6 @@
 // lib/screens/primeiro_acesso_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:turno_pago/models/veiculo.dart';
 import 'package:turno_pago/services/veiculo_service.dart';
 import 'manutencao_screen.dart';
@@ -15,7 +14,6 @@ class PrimeiroAcessoScreen extends StatefulWidget {
 
 class _PrimeiroAcessoScreenState extends State<PrimeiroAcessoScreen> {
   final _formKey = GlobalKey<FormState>();
-
   final _consumoController = TextEditingController();
   final _kmAtualController = TextEditingController();
   final _percentualReservaController = TextEditingController();
@@ -28,10 +26,8 @@ class _PrimeiroAcessoScreenState extends State<PrimeiroAcessoScreen> {
         percentualReserva: double.tryParse(_percentualReservaController.text) ?? 10.0,
       );
 
-      await VeiculoService.salvarVeiculo(veiculo);
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('primeiro_acesso_concluido', true);
+      // Salva os dados na nuvem
+      await VeiculoService().salvarVeiculo(veiculo);
 
       if (!mounted) return;
 
@@ -54,12 +50,10 @@ class _PrimeiroAcessoScreenState extends State<PrimeiroAcessoScreen> {
             key: _formKey,
             child: ListView(
               children: [
-                // LINHA ALTERADA: Troca o Ícone pela sua imagem
                 Image.asset('assets/images/logo_app.png', height: 80),
-
                 const SizedBox(height: 16),
                 Text(
-                  'Bem-vindo ao Turno Pago!',
+                  'Configuração Inicial',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
                 ),

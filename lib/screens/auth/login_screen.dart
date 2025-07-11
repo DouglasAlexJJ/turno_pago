@@ -1,7 +1,9 @@
 // lib/screens/auth/login_screen.dart
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:turno_pago/screens/auth/register_screen.dart';
+import 'package:turno_pago/services/auth_service.dart'; // Importe o AuthService
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -16,6 +18,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
 
+  // Crie uma instância do nosso serviço de autenticação
+  final AuthService _authService = AuthService();
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -23,21 +28,57 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  // LÓGICA DE LOGIN ATUALIZADA
   Future<void> _login() async {
-    // A lógica de login com o AuthService virá aqui no futuro
-    if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true;
-      });
-      // Simula uma espera
-      await Future.delayed(const Duration(seconds: 2));
-      setState(() {
-        _isLoading = false;
-      });
+    // Valida o formulário
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    // Tenta fazer o login usando o AuthService
+    try {
+      final user = await _authService.signInWithEmailAndPassword(
+        email: _emailController.text,
+        password: _passwordController.text,
+      );
+
+      // Se o login falhar (usuário/senha errados), 'user' será nulo
+      if (user == null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('E-mail ou senha inválidos.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      // Se o login for bem-sucedido, o AuthGate fará o redirecionamento automático.
+
+    } on FirebaseAuthException catch (e) {
+      // Trata outros erros possíveis do Firebase
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message ?? 'Ocorreu um erro.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      // Garante que o indicador de carregamento pare, mesmo se der erro
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   void _navigateToRegister() {
+    // Usa 'pushReplacement' para que o usuário não possa "voltar" para o login após ir para o cadastro
     Navigator.of(context).push(
       MaterialPageRoute(builder: (context) => const RegisterScreen()),
     );
@@ -58,8 +99,7 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Aqui você pode adicionar a logo do seu app, se quiser
-                // Image.asset('assets/images/logo_app.png', height: 80),
+                Image.asset('assets/images/logo_app.png', height: 80),
                 const SizedBox(height: 32),
                 TextFormField(
                   controller: _emailController,

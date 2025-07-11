@@ -1,34 +1,35 @@
 // lib/services/veiculo_service.dart
 
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/veiculo.dart';
 
 class VeiculoService {
-  static const String _consumoKey = 'veiculo_consumo_medio';
-  static const String _kmAtualKey = 'veiculo_km_atual';
-  static const String _precoCombustivelKey = 'veiculo_preco_combustivel';
-  static const String _percentualReservaKey = 'veiculo_percentual_reserva'; // NOVA CHAVE
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  static Future<void> salvarVeiculo(Veiculo veiculo) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble(_consumoKey, veiculo.consumoMedio);
-    await prefs.setInt(_kmAtualKey, veiculo.kmAtual);
-    await prefs.setDouble(_precoCombustivelKey, veiculo.precoCombustivel);
-    await prefs.setDouble(_percentualReservaKey, veiculo.percentualReserva); // SALVA O NOVO DADO
+  // Caminho para a configuração do veículo do usuário logado
+  DocumentReference _getVeiculoDocRef() {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception("Usuário não está logado.");
+    return _firestore.collection('users').doc(user.uid).collection('veiculo').doc('config');
   }
 
-  static Future<Veiculo> getVeiculo() async {
-    final prefs = await SharedPreferences.getInstance();
-    final consumo = prefs.getDouble(_consumoKey) ?? 10.0;
-    final kmAtual = prefs.getInt(_kmAtualKey) ?? 0;
-    final precoCombustivel = prefs.getDouble(_precoCombustivelKey) ?? 0.0;
-    final percentualReserva = prefs.getDouble(_percentualReservaKey) ?? 10.0; // LÊ O NOVO DADO
+  // Salva os dados do veículo na nuvem
+  Future<void> salvarVeiculo(Veiculo veiculo) async {
+    await _getVeiculoDocRef().set(veiculo.toMap());
+  }
 
-    return Veiculo(
-      consumoMedio: consumo,
-      kmAtual: kmAtual,
-      precoCombustivel: precoCombustivel,
-      percentualReserva: percentualReserva, // PASSA PARA O CONSTRUTOR
-    );
+  // Pega os dados do veículo da nuvem
+  Future<Veiculo> getVeiculo() async {
+    final docSnapshot = await _getVeiculoDocRef().get();
+
+    if (docSnapshot.exists) {
+      // Se já existem dados salvos, usa eles
+      return Veiculo.fromMap(docSnapshot.data() as Map<String, dynamic>);
+    } else {
+      // Se não, retorna um veículo com valores padrão
+      return Veiculo();
+    }
   }
 }
