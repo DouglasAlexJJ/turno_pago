@@ -59,17 +59,18 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
     });
   }
 
-  // FUNÇÃO ATUALIZADA COM O POPUP DE EXPLICAÇÃO
+  // FUNÇÃO DE PERMISSÃO ATUALIZADA
   Future<void> _iniciarServicoETurno() async {
+    // 1. Checa a permissão atual
     LocationPermission permission = await Geolocator.checkPermission();
+
+    // 2. Se a permissão nunca foi pedida, mostra o popup explicativo
     if (permission == LocationPermission.denied) {
-      // MOSTRA NOSSO POPUP ANTES DE PEDIR A PERMISSÃO OFICIAL
       await showDialog(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Permissão de Localização'),
-          content: const Text(
-              "Para calcular sua distância corretamente, mesmo com o app fechado, o Turno Pago precisa de acesso à sua localização 'o tempo todo'.\n\nNa próxima tela, por favor, escolha a opção 'Permitir o tempo todo'."),
+          content: const Text("Para calcular sua distância corretamente, mesmo com o app fechado, o Turno Pago precisa de acesso à sua localização 'o tempo todo'.\n\nNa próxima tela, por favor, escolha a opção 'Permitir o tempo todo' se disponível, ou 'Permitir durante o uso do app' para continuarmos."),
           actions: [
             TextButton(
               child: const Text('ENTENDI, CONTINUAR'),
@@ -78,19 +79,23 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
           ],
         ),
       );
-
-      // AGORA PEDE A PERMISSÃO OFICIAL
+      // Pede a permissão ao sistema
       permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
-        return; // Usuário negou, então não iniciamos o turno.
-      }
     }
 
+    // 3. Se a permissão foi negada permanentemente, guia o usuário para as configs
     if (permission == LocationPermission.deniedForever) {
-      // Opcional: mostrar um aviso para o usuário ir até as configurações do celular
+      await _showSettingsDialog("A permissão de localização foi negada permanentemente. Para usar esta função, você precisa habilitá-la manualmente nas configurações.");
       return;
     }
 
+    // 4. Se a permissão NÃO é 'always', guia o usuário para as configs
+    if (permission != LocationPermission.always) {
+      await _showSettingsDialog("A localização em segundo plano é essencial. Por favor, vá para as configurações e mude a permissão para 'Permitir o tempo todo'.");
+      return;
+    }
+
+    // 5. Se chegamos aqui, a permissão 'always' está garantida. Mostra o lembrete do TRIP.
     final confirmado = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -115,6 +120,30 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
         _ouvirServico();
       }
     }
+  }
+
+  // NOVO WIDGET DE DIÁLOGO para guiar às configurações
+  Future<void> _showSettingsDialog(String message) async {
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Permissão Necessária'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            child: const Text('Cancelar'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          TextButton(
+            child: const Text('IR PARA CONFIGURAÇÕES'),
+            onPressed: () {
+              Geolocator.openAppSettings();
+              Navigator.of(context).pop();
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   // O resto do arquivo (cancelar, finalizar, salvar, build) permanece o mesmo
