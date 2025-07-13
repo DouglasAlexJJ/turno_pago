@@ -8,27 +8,32 @@ class VeiculoService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // Caminho para a configuração do veículo do usuário logado
   DocumentReference _getVeiculoDocRef() {
     final user = _auth.currentUser;
     if (user == null) throw Exception("Usuário não está logado.");
     return _firestore.collection('users').doc(user.uid).collection('veiculo').doc('config');
   }
 
-  // Salva os dados do veículo na nuvem
+  // Este método é para salvar o objeto COMPLETO (usado na configuração)
   Future<void> salvarVeiculo(Veiculo veiculo) async {
     await _getVeiculoDocRef().set(veiculo.toMap());
   }
 
-  // Pega os dados do veículo da nuvem
-  Future<Veiculo> getVeiculo() async {
-    final docSnapshot = await _getVeiculoDocRef().get();
+  // NOVA FUNÇÃO: Atualiza apenas a quilometragem, de forma segura.
+  Future<void> atualizarKm(int novaKm) async {
+    await _getVeiculoDocRef().update({'kmAtual': novaKm});
+  }
 
-    if (docSnapshot.exists) {
-      // Se já existem dados salvos, usa eles
-      return Veiculo.fromMap(docSnapshot.data() as Map<String, dynamic>);
-    } else {
-      // Se não, retorna um veículo com valores padrão
+  Future<Veiculo> getVeiculo() async {
+    try {
+      final docSnapshot = await _getVeiculoDocRef().get();
+      if (docSnapshot.exists && docSnapshot.data() != null) {
+        return Veiculo.fromMap(docSnapshot.data() as Map<String, dynamic>);
+      } else {
+        return Veiculo(); // Retorna um veículo padrão se não houver dados
+      }
+    } catch (e) {
+      // Em caso de erro (ex: usuário recém-criado sem dados), retorna um veículo padrão
       return Veiculo();
     }
   }

@@ -338,6 +338,7 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
   }
 
   Future<void> _salvarDados(Map<String, dynamic> dados) async {
+    // 1. Adiciona o novo Turno
     final novoTurno = Turno(
       id: const Uuid().v4(),
       data: DateTime.now(),
@@ -347,10 +348,11 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
       precoCombustivel: dados['precoCombustivel'],
     );
     await DadosService.adicionarTurno(novoTurno);
-    final veiculoAtualizado = _veiculo!.copyWith(
-        kmAtual: dados['kmAtual'], precoCombustivel: dados['precoCombustivel']);
-    await veiculoService.salvarVeiculo(veiculoAtualizado); // Usa a instância
+
+    // 2. ATUALIZA APENAS A QUILOMETRAGEM, preservando o resto
+    await veiculoService.atualizarKm(dados['kmAtual']);
   }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(

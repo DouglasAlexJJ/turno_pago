@@ -2,7 +2,7 @@
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:turno_pago/screens/primeiro_acesso_screen.dart';
+import 'package:turno_pago/screens/selecionar_tipo_veiculo_screen.dart';
 import 'package:turno_pago/services/auth_service.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -45,9 +45,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
 
       if (user != null && mounted) {
-        // Redireciona para a configuração inicial após o cadastro
+        // Redireciona para a tela de seleção de tipo de veículo após o cadastro
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const PrimeiroAcessoScreen()),
+          MaterialPageRoute(builder: (context) => const SelecionarTipoVeiculoScreen()),
               (route) => false,
         );
       }
