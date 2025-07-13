@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "191278083978",
-    "project_id": "turno-pago-app",
-    "storage_bucket": "turno-pago-app.firebasestorage.app"
+    "project_number": "1072564019225",
+    "project_id": "turnopago-v2",
+    "storage_bucket": "turnopago-v2.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:191278083978:android:38165d15e10918262ca273",
+        "mobilesdk_app_id": "1:1072564019225:android:dde2cc48fe49c774970a88",
         "android_client_info": {
           "package_name": "com.example.turno_pago"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDmIUNEeGL1NP8dwA3xEksAQaWI_zIKY3o"
+          "current_key": "AIzaSyDTtIBOTeX18ngWbxSdUW8W8RHhcFxBl40"
         }
       ],
       "services": {

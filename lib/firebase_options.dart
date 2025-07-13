@@ -50,19 +50,19 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDmIUNEeGL1NP8dwA3xEksAQaWI_zIKY3o',
-    appId: '1:191278083978:android:3249aa101ea59fbb2ca273',
-    messagingSenderId: '191278083978',
-    projectId: 'turno-pago-app',
-    storageBucket: 'turno-pago-app.firebasestorage.app',
+    apiKey: 'AIzaSyDTtIBOTeX18ngWbxSdUW8W8RHhcFxBl40',
+    appId: '1:1072564019225:android:dde2cc48fe49c774970a88',
+    messagingSenderId: '1072564019225',
+    projectId: 'turnopago-v2',
+    storageBucket: 'turnopago-v2.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyDRvIBJ_j_a0fz2XSo6JaZAGa2BOWCqx9I',
-    appId: '1:191278083978:ios:f91a1d9afbfc01cf2ca273',
-    messagingSenderId: '191278083978',
-    projectId: 'turno-pago-app',
-    storageBucket: 'turno-pago-app.firebasestorage.app',
+    apiKey: 'AIzaSyD9qh_GfN5bHljx8nqf-zFY5PBA9-xiOrY',
+    appId: '1:1072564019225:ios:acc5f619df45bc6f970a88',
+    messagingSenderId: '1072564019225',
+    projectId: 'turnopago-v2',
+    storageBucket: 'turnopago-v2.firebasestorage.app',
     iosBundleId: 'com.example.turnoPago',
   );
 }
