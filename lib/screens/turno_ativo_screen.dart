@@ -335,13 +335,20 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
   }
 
   Future<void> _salvarDados(Map<String, dynamic> dados) async {
+    final prefs = await SharedPreferences.getInstance();
+    final startTimeMillis = prefs.getInt('turno_start_time') ?? DateTime.now().millisecondsSinceEpoch;
+    final startTime = DateTime.fromMillisecondsSinceEpoch(startTimeMillis);
+    final endTime = DateTime.now();
+    final duracao = endTime.difference(startTime).inSeconds;
+
     final novoTurno = Turno(
       id: const Uuid().v4(),
-      data: DateTime.now(),
+      data: endTime,
       ganhos: dados['ganhos'],
       kmRodados: dados['kmRodados'],
       corridas: dados['corridas'],
       precoCombustivel: dados['precoCombustivel'],
+      duracaoEmSegundos: duracao, // Salva a duração calculada
     );
     await DadosService.adicionarTurno(novoTurno);
     await veiculoService.atualizarKm(dados['kmAtual']);

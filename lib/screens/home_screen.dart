@@ -7,11 +7,11 @@ import 'package:turno_pago/models/manutencao_item.dart';
 import 'package:turno_pago/models/turno.dart';
 import 'package:turno_pago/models/veiculo.dart';
 import 'package:turno_pago/screens/historico_turnos_screen.dart';
-import 'package:turno_pago/utils/app_formatters.dart';
-import 'despesas_screen.dart';
-import 'turno_ativo_screen.dart';
+import 'package:turno_pago/screens/despesas_screen.dart';
+import 'package:turno_pago/screens/turno_ativo_screen.dart';
 import '../services/dados_service.dart';
 import 'package:turno_pago/services/veiculo_service.dart';
+import 'package:turno_pago/utils/app_formatters.dart';
 
 class HomeScreen extends StatefulWidget {
   final bool verificarTurnoAoIniciar;
@@ -82,12 +82,16 @@ class HomeScreenState extends State<HomeScreen> {
 
     double ganhosBrutos = 0;
     double kmRodados = 0;
+    int totalSegundosDia = 0;
+
     for (final turno in turnosDeHoje) {
       ganhosBrutos += turno.ganhos;
       kmRodados += turno.kmRodados;
+      totalSegundosDia += turno.duracaoEmSegundos;
     }
 
-    final totalDespesas = despesasDeHoje.fold(0.0, (soma, d) => soma + d.valor);
+    final totalDespesas =
+    despesasDeHoje.fold(0.0, (soma, d) => soma + d.valor);
 
     double provisaoManutencao = 0;
     double custoAluguelDia = 0;
@@ -101,9 +105,11 @@ class HomeScreenState extends State<HomeScreen> {
       if (turnosDeHoje.isNotEmpty) {
         custoAluguelDia = veiculo.provisaoDiariaAluguel;
       }
-      if (veiculo.kmContratadoAluguel != null && veiculo.kmInicialAluguel != null) {
+      if (veiculo.kmContratadoAluguel != null &&
+          veiculo.kmInicialAluguel != null) {
         final kmRodadosNoCiclo = veiculo.kmAtual - veiculo.kmInicialAluguel!;
-        kmRestantesFranquia = (veiculo.kmContratadoAluguel! - kmRodadosNoCiclo).toDouble();
+        kmRestantesFranquia =
+            (veiculo.kmContratadoAluguel! - kmRodadosNoCiclo).toDouble();
       }
     }
 
@@ -120,9 +126,17 @@ class HomeScreenState extends State<HomeScreen> {
       'provisaoManutencao': provisaoManutencao,
       'custoAluguelDia': custoAluguelDia,
       'kmRestantesFranquia': kmRestantesFranquia,
+      'totalSegundosDia': totalSegundosDia,
       'valorReserva': valorReserva,
       'lucroFinal': lucroFinal,
     };
+  }
+
+  String _formatarDuracao(int totalSegundos) {
+    final duracao = Duration(seconds: totalSegundos);
+    final horas = duracao.inHours;
+    final minutos = duracao.inMinutes.remainder(60);
+    return '${horas.toString().padLeft(2, '0')}h ${minutos.toString().padLeft(2, '0')}min';
   }
 
   void _iniciarNovoTurno() async {
@@ -135,15 +149,12 @@ class HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // A FUNÇÃO _abrirTelaManutencao FOI REMOVIDA
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Resumo do Dia"),
         centerTitle: true,
-        // O BOTÃO DE MANUTENÇÃO FOI REMOVIDO DA LISTA DE actions
         actions: const [],
       ),
       body: RefreshIndicator(
@@ -155,7 +166,8 @@ class HomeScreenState extends State<HomeScreen> {
               return const Center(child: CircularProgressIndicator());
             }
             if (snapshot.hasError) {
-              return Center(child: Text('Erro ao carregar dados: ${snapshot.error}'));
+              return Center(
+                  child: Text('Erro ao carregar dados: ${snapshot.error}'));
             }
             if (!snapshot.hasData || snapshot.data == null) {
               return const Center(child: Text('Nenhum dado encontrado.'));
@@ -170,7 +182,6 @@ class HomeScreenState extends State<HomeScreen> {
                 children: [
                   if (veiculo.tipoVeiculo == TipoVeiculo.alugado)
                     _buildControleAluguelCard(dados),
-
                   const SizedBox(height: 16),
                   _buildResumoDoDiaCard(dados),
                   const SizedBox(height: 16),
@@ -178,7 +189,10 @@ class HomeScreenState extends State<HomeScreen> {
                     icon: const Icon(Icons.receipt_long),
                     label: const Text('Gerenciar Despesas'),
                     onPressed: () async {
-                      await Navigator.push(context, MaterialPageRoute(builder: (_) => const DespesasScreen()));
+                      await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const DespesasScreen()));
                       _recarregarDados();
                     },
                   ),
@@ -187,7 +201,10 @@ class HomeScreenState extends State<HomeScreen> {
                     icon: const Icon(Icons.history),
                     label: const Text('Ver Histórico de Turnos'),
                     onPressed: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoricoTurnosScreen()));
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const HistoricoTurnosScreen()));
                     },
                   )
                 ],
@@ -211,7 +228,8 @@ class HomeScreenState extends State<HomeScreen> {
 
     int diasRestantes = 0;
     if (veiculo.dataFimAluguel != null) {
-      diasRestantes = veiculo.dataFimAluguel!.difference(DateTime.now()).inDays;
+      diasRestantes =
+          veiculo.dataFimAluguel!.difference(DateTime.now()).inDays;
       if (diasRestantes < 0) diasRestantes = 0;
     }
 
@@ -227,11 +245,16 @@ class HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Controle do Aluguel', style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.blue.shade800)),
+            Text('Controle do Aluguel',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(color: Colors.blue.shade800)),
             const Divider(height: 20),
             _buildInfoRow('🗓️ Dias Restantes:', '$diasRestantes dias'),
             if (veiculo.kmContratadoAluguel != null)
-              _buildInfoRow('🛣️ KM Restantes da Franquia:', AppFormatters.formatKm(kmRestantes)),
+              _buildInfoRow('🛣️ KM Restantes da Franquia:',
+                  AppFormatters.formatKm(kmRestantes)),
           ],
         ),
       ),
@@ -246,6 +269,7 @@ class HomeScreenState extends State<HomeScreen> {
     final double custoAluguelDia = dados['custoAluguelDia'];
     final double valorReserva = dados['valorReserva'];
     final double lucroFinal = dados['lucroFinal'];
+    final int totalSegundosDia = dados['totalSegundosDia'];
 
     return Card(
       elevation: 4,
@@ -255,28 +279,47 @@ class HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildInfoRow('💰 Ganhos Brutos', AppFormatters.formatCurrency(ganhosBrutos)),
+            _buildInfoRow(
+                '💰 Ganhos Brutos', AppFormatters.formatCurrency(ganhosBrutos)),
+            if (totalSegundosDia > 0)
+              _buildInfoRow(
+                  '🕒 Horas Trabalhadas', _formatarDuracao(totalSegundosDia)),
             const Divider(height: 20),
-            Text('Custos e Provisões do Dia:', style: Theme.of(context).textTheme.titleSmall),
+            Text('Custos e Provisões do Dia:',
+                style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 8),
-            _buildInfoRow('💸 Despesas', AppFormatters.formatCurrency(despesas), isNegative: true),
-
+            _buildInfoRow(
+                '💸 Despesas', AppFormatters.formatCurrency(despesas),
+                isNegative: true),
             if (veiculo.tipoVeiculo == TipoVeiculo.alugado)
-              _buildInfoRow('🔑 Provisão Aluguel', AppFormatters.formatCurrency(custoAluguelDia), isNegative: true),
-
+              _buildInfoRow('🔑 Provisão Aluguel',
+                  AppFormatters.formatCurrency(custoAluguelDia),
+                  isNegative: true),
             if (veiculo.tipoVeiculo == TipoVeiculo.proprio)
-              _buildInfoRow('🛠️ Provisão Manutenção', AppFormatters.formatCurrency(provisaoManutencao), isNegative: true),
-
-            _buildInfoRow('🚨 Reserva de Emergência', AppFormatters.formatCurrency(valorReserva), isNegative: true, negativeColor: Colors.orange.shade800),
+              _buildInfoRow('🛠️ Provisão Manutenção',
+                  AppFormatters.formatCurrency(provisaoManutencao),
+                  isNegative: true),
+            _buildInfoRow('🚨 Reserva de Emergência',
+                AppFormatters.formatCurrency(valorReserva),
+                isNegative: true,
+                negativeColor: Colors.orange.shade800),
             const Divider(height: 20),
-            _buildInfoRow('✅ Lucro Final (no bolso)', AppFormatters.formatCurrency(lucroFinal), isHighlight: true, lucroValor: lucroFinal),
+            _buildInfoRow(
+                '✅ Lucro Final (no bolso)',
+                AppFormatters.formatCurrency(lucroFinal),
+                isHighlight: true,
+                lucroValor: lucroFinal),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInfoRow(String label, String value, {bool isHighlight = false, bool isNegative = false, double? lucroValor, Color? negativeColor}) {
+  Widget _buildInfoRow(String label, String value,
+      {bool isHighlight = false,
+        bool isNegative = false,
+        double? lucroValor,
+        Color? negativeColor}) {
     Color? textColor;
     FontWeight fontWeight = FontWeight.w500;
 
@@ -284,7 +327,9 @@ class HomeScreenState extends State<HomeScreen> {
       textColor = negativeColor ?? Colors.redAccent;
     } else if (isHighlight) {
       fontWeight = FontWeight.bold;
-      textColor = (lucroValor ?? 0) >= 0 ? Colors.green.shade800 : Colors.redAccent;
+      textColor = (lucroValor ?? 0) >= 0
+          ? Colors.green.shade800
+          : Colors.red.shade700;
     }
 
     return Padding(
@@ -292,7 +337,10 @@ class HomeScreenState extends State<HomeScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Expanded(child: Text(label, style: const TextStyle(fontSize: 16, color: Colors.black54))),
+          Expanded(
+              child: Text(label,
+                  style: const TextStyle(
+                      fontSize: 16, color: Colors.black54))),
           Text(
             value,
             style: TextStyle(

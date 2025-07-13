@@ -2,12 +2,16 @@
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart'; // ADICIONE ESTE IMPORT
 import 'package:turno_pago/firebase_options.dart';
-import 'package:turno_pago/screens/auth/auth_gate.dart'; // Importe o AuthGate
+import 'package:turno_pago/screens/auth/auth_gate.dart';
 import 'package:turno_pago/services/background_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ADICIONE ESTA LINHA para carregar os dados de localização
+  await initializeDateFormatting('pt_BR', null);
 
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
@@ -15,7 +19,6 @@ Future<void> main() async {
 
   await initializeService();
 
-  // A lógica de primeiro acesso foi removida daqui temporariamente
   runApp(const MyApp());
 }
 
@@ -31,7 +34,6 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
       debugShowCheckedModeBanner: false,
-      // A TELA INICIAL AGORA É O NOSSO PORTÃO DE AUTENTICAÇÃO
       home: const AuthGate(),
     );
   }

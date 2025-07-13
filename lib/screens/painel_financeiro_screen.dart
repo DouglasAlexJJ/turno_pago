@@ -2,9 +2,12 @@
 
 import 'package:flutter/material.dart';
 import 'package:turno_pago/models/despesa.dart';
+import 'package:turno_pago/models/veiculo.dart';
 import 'package:turno_pago/services/dados_service.dart';
+import 'package:turno_pago/services/veiculo_service.dart';
 import 'package:turno_pago/utils/app_formatters.dart';
 import 'package:collection/collection.dart';
+import 'package:turno_pago/screens/relatorios_screen.dart';
 
 class PainelFinanceiroScreen extends StatefulWidget {
   const PainelFinanceiroScreen({super.key});
@@ -29,38 +32,37 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
     });
   }
 
+  // FUNÇÃO DE PROCESSAMENTO ATUALIZADA
   Future<Map<String, dynamic>> _processarDadosDoPeriodo() async {
+    final veiculo = await VeiculoService().getVeiculo();
     final todosOsTurnos = await DadosService.getTurnos();
     final todasAsDespesas = await DadosService.getDespesas();
+    final itensManutencao = await DadosService.getManutencaoItens();
 
     final agora = DateTime.now();
     DateTime inicioPeriodo;
 
     if (_periodoSelecionado == 'semana') {
-      // --- LÓGICA ALTERADA ---
-      // Calcula o início da semana como a última Segunda-feira.
-      // (weekday retorna 1 para Segunda, 7 para Domingo)
       inicioPeriodo = agora.subtract(Duration(days: agora.weekday - 1));
     } else { // Mês
       inicioPeriodo = DateTime(agora.year, agora.month, 1);
     }
-    // Zera o horário para pegar o dia todo
     inicioPeriodo = DateTime(inicioPeriodo.year, inicioPeriodo.month, inicioPeriodo.day);
 
+    final turnosDoPeriodo = todosOsTurnos.where((t) => !t.data.isBefore(inicioPeriodo)).toList();
+    final despesasDoPeriodo = todasAsDespesas.where((d) => !d.data.isBefore(inicioPeriodo)).toList();
 
-    final turnosDoPeriodo = todosOsTurnos.where((t) => !t.data.isBefore(inicioPeriodo));
-    final despesasDoPeriodo = todasAsDespesas.where((d) => !d.data.isBefore(inicioPeriodo));
-
-    // Cálculos financeiros
     double ganhosDoPeriodo = turnosDoPeriodo.fold(0.0, (soma, t) => soma + t.ganhos);
     double kmRodadosPeriodo = turnosDoPeriodo.fold(0.0, (soma, t) => soma + t.kmRodados);
     int corridasPeriodo = turnosDoPeriodo.fold(0, (soma, t) => soma + t.corridas);
+    // NOVO CÁLCULO: Soma a duração de todos os turnos
+    int totalSegundosTrabalhados = turnosDoPeriodo.fold(0, (soma, t) => soma + t.duracaoEmSegundos);
 
-    // Métricas de desempenho
     final ganhoPorKm = (kmRodadosPeriodo > 0) ? ganhosDoPeriodo / kmRodadosPeriodo : 0.0;
     final ganhoPorCorrida = (corridasPeriodo > 0) ? ganhosDoPeriodo / corridasPeriodo : 0.0;
+    // NOVO CÁLCULO: Calcula o ganho por hora
+    final ganhoPorHora = (totalSegundosTrabalhados > 0) ? (ganhosDoPeriodo / (totalSegundosTrabalhados / 3600)) : 0.0;
 
-    // Agrupamento e soma das despesas por categoria
     final despesasAgrupadas = groupBy(despesasDoPeriodo, (Despesa d) => d.categoria);
     final Map<String, double> somaPorCategoria = despesasAgrupadas.map(
           (categoria, lista) => MapEntry(
@@ -70,14 +72,34 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
     );
     double totalDespesas = somaPorCategoria.values.fold(0.0, (soma, valor) => soma + valor);
 
+    double custosVeiculoPeriodo = 0;
+    if (veiculo.tipoVeiculo == TipoVeiculo.proprio) {
+      final custoPorKm = itensManutencao.fold(0.0, (soma, item) => soma + item.custoPorKm);
+      custosVeiculoPeriodo = kmRodadosPeriodo * custoPorKm;
+    } else {
+      final diasTrabalhados = turnosDoPeriodo.map((t) => DateTime(t.data.year, t.data.month, t.data.day)).toSet();
+      custosVeiculoPeriodo = diasTrabalhados.length * veiculo.provisaoDiariaAluguel;
+    }
+
     return {
+      'totalSegundosTrabalhados': totalSegundosTrabalhados,
+      'ganhoPorHora': ganhoPorHora,
       'ganhosDoPeriodo': ganhosDoPeriodo,
       'kmRodadosPeriodo': kmRodadosPeriodo,
       'ganhoPorKm': ganhoPorKm,
       'ganhoPorCorrida': ganhoPorCorrida,
       'somaPorCategoria': somaPorCategoria,
       'totalDespesas': totalDespesas,
+      'custosVeiculoPeriodo': custosVeiculoPeriodo,
     };
+  }
+
+  // Função helper para formatar a duração
+  String _formatarDuracao(int totalSegundos) {
+    final duracao = Duration(seconds: totalSegundos);
+    final horas = duracao.inHours;
+    final minutos = duracao.inMinutes.remainder(60);
+    return '${horas.toString().padLeft(2, '0')}h ${minutos.toString().padLeft(2, '0')}min';
   }
 
   @override
@@ -118,6 +140,7 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
                 final dados = snapshot.data!;
                 final double ganhosDoPeriodo = dados['ganhosDoPeriodo'];
                 final double totalDespesas = dados['totalDespesas'];
+                final double custosVeiculo = dados['custosVeiculoPeriodo'];
                 final Map<String, double> somaPorCategoria = dados['somaPorCategoria'];
 
                 return RefreshIndicator(
@@ -127,7 +150,19 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
                     children: [
                       _buildMetricasCard(dados),
                       const SizedBox(height: 16),
-                      _buildDespesasDetalhadasCard(somaPorCategoria, ganhosDoPeriodo, totalDespesas),
+                      _buildDespesasDetalhadasCard(somaPorCategoria, ganhosDoPeriodo, totalDespesas, custosVeiculo),
+                      const SizedBox(height: 16), // Espaçamento
+                      _buildCustosPorCategoriaCard(somaPorCategoria),
+                      const SizedBox(height: 24),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.analytics_outlined),
+                        label: const Text('Ver Relatórios Detalhados'),
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (context) => const RelatoriosScreen()),
+                          );
+                        },
+                      ),
                     ],
                   ),
                 );
@@ -139,6 +174,7 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
     );
   }
 
+  // WIDGET DE MÉTRICAS ATUALIZADO
   Widget _buildMetricasCard(Map<String, dynamic> dados) {
     return Card(
       elevation: 4,
@@ -149,8 +185,10 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
           children: [
             Text('Métricas de Desempenho', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 16),
-            _buildInfoRow('🛣️ KM Rodados no Período:', AppFormatters.formatKm(dados['kmRodadosPeriodo'])),
-            _buildInfoRow('📈 Ganhos por KM:', AppFormatters.formatCurrency(dados['ganhoPorKm'])),
+            // NOVA LINHA PARA HORAS TRABALHADAS
+            _buildInfoRow('🕒 Horas Trabalhadas:', _formatarDuracao(dados['totalSegundosTrabalhados'])),
+            _buildInfoRow('💰 Ganhos por Hora:', AppFormatters.formatCurrency(dados['ganhoPorHora'])),
+            _buildInfoRow('🛣️ Ganhos por KM:', AppFormatters.formatCurrency(dados['ganhoPorKm'])),
             _buildInfoRow('🏁 Média por Corrida:', AppFormatters.formatCurrency(dados['ganhoPorCorrida'])),
           ],
         ),
@@ -158,9 +196,11 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
     );
   }
 
-  Widget _buildDespesasDetalhadasCard(Map<String, double> somaPorCategoria, double ganhos, double totalDespesas) {
+  Widget _buildDespesasDetalhadasCard(Map<String, double> somaPorCategoria, double ganhos, double totalDespesas, double custosVeiculo) {
     final sortedEntries = somaPorCategoria.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
+
+    final double lucroLiquido = ganhos - totalDespesas - custosVeiculo;
 
     return Card(
       elevation: 4,
@@ -182,12 +222,13 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
               ...sortedEntries.map((entry) {
                 return _buildInfoRow('💸 ${entry.key}:', AppFormatters.formatCurrency(entry.value), isNegative: true);
               }),
+            _buildInfoRow('🚗 Custos do Veículo:', AppFormatters.formatCurrency(custosVeiculo), isNegative: true),
             const Divider(),
             _buildInfoRow(
-                '✅ Lucro Líquido (Ganhos - Despesas):', // Rótulo ajustado para maior clareza
-                AppFormatters.formatCurrency(ganhos - totalDespesas),
+                '✅ Lucro Líquido:',
+                AppFormatters.formatCurrency(lucroLiquido),
                 isHighlight: true,
-                lucroValor: ganhos - totalDespesas
+                lucroValor: lucroLiquido
             ),
           ],
         ),
@@ -221,6 +262,52 @@ class _PainelFinanceiroScreenState extends State<PainelFinanceiroScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCustosPorCategoriaCard(Map<String, double> somaPorCategoria) {
+    final double totalDespesas = somaPorCategoria.values.fold(0.0, (soma, valor) => soma + valor);
+    final sortedEntries = somaPorCategoria.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    if (sortedEntries.isEmpty) {
+      return const SizedBox.shrink(); // Não mostra o card se não houver despesas
+    }
+
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Custos por Categoria', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 16),
+            ...sortedEntries.map((entry) {
+              final percentual = (totalDespesas > 0) ? (entry.value / totalDespesas) * 100 : 0;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('💸 ${entry.key}:', style: const TextStyle(fontSize: 16)),
+                    Text(
+                      '${AppFormatters.formatCurrency(entry.value)} (${percentual.toStringAsFixed(1)}%)',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            const Divider(),
+            _buildInfoRow(
+                'Total de Custos:',
+                AppFormatters.formatCurrency(totalDespesas),
+                isHighlight: true
+            ),
+          ],
+        ),
       ),
     );
   }
