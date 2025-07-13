@@ -19,13 +19,51 @@ class _ConfigVeiculoAlugadoScreenState
     extends State<ConfigVeiculoAlugadoScreen> {
   final _formKey = GlobalKey<FormState>();
 
+  // Controladores
   final _custoTotalController = MoneyMaskedTextController(
       leftSymbol: 'R\$ ', decimalSeparator: ',', thousandSeparator: '.');
   final _kmContratadoController = TextEditingController();
   final _kmAtualController = TextEditingController();
   final _consumoController = TextEditingController();
 
+  // Nós de Foco
+  final _custoTotalFocus = FocusNode();
+  final _kmContratadoFocus = FocusNode();
+  final _kmAtualFocus = FocusNode();
+  final _consumoFocus = FocusNode();
+
   DateTime? _dataFimAluguel;
+
+  @override
+  void initState() {
+    super.initState();
+    _adicionarListenersDeFoco();
+  }
+
+  @override
+  void dispose() {
+    // Limpa os nós de foco
+    _custoTotalFocus.dispose();
+    _kmContratadoFocus.dispose();
+    _kmAtualFocus.dispose();
+    _consumoFocus.dispose();
+    super.dispose();
+  }
+
+  void _adicionarListenersDeFoco() {
+    void addSelectAllOnFocus(FocusNode focusNode, TextEditingController controller) {
+      focusNode.addListener(() {
+        if (focusNode.hasFocus) {
+          controller.selection = TextSelection(baseOffset: 0, extentOffset: controller.text.length);
+        }
+      });
+    }
+
+    addSelectAllOnFocus(_custoTotalFocus, _custoTotalController);
+    addSelectAllOnFocus(_kmContratadoFocus, _kmContratadoController);
+    addSelectAllOnFocus(_kmAtualFocus, _kmAtualController);
+    addSelectAllOnFocus(_consumoFocus, _consumoController);
+  }
 
   Future<void> _selecionarDataDevolucao(BuildContext context) async {
     final DateTime? dataEscolhida = await showDatePicker(
@@ -78,15 +116,6 @@ class _ConfigVeiculoAlugadoScreenState
   }
 
   @override
-  void dispose() {
-    _custoTotalController.dispose();
-    _kmContratadoController.dispose();
-    _kmAtualController.dispose();
-    _consumoController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -107,6 +136,7 @@ class _ConfigVeiculoAlugadoScreenState
 
               TextFormField(
                 controller: _custoTotalController,
+                focusNode: _custoTotalFocus,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: 'Custo Total do Aluguel (R\$)'),
                 validator: (v) => _custoTotalController.numberValue <= 0
@@ -133,6 +163,7 @@ class _ConfigVeiculoAlugadoScreenState
 
               TextFormField(
                 controller: _kmContratadoController,
+                focusNode: _kmContratadoFocus,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: 'Franquia de KM do Pacote (Opcional)'),
               ),
@@ -147,6 +178,7 @@ class _ConfigVeiculoAlugadoScreenState
 
               TextFormField(
                 controller: _kmAtualController,
+                focusNode: _kmContratadoFocus,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: 'KM atual do veículo (no odômetro)'),
                 validator: (v) => (v == null || v.isEmpty) ? 'Campo obrigatório' : null,
@@ -155,6 +187,7 @@ class _ConfigVeiculoAlugadoScreenState
 
               TextFormField(
                 controller: _consumoController,
+                focusNode: _kmContratadoFocus,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(labelText: 'Consumo médio (km/l)'),
                 validator: (v) => (v == null || v.isEmpty) ? 'Campo obrigatório' : null,

@@ -25,9 +25,10 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
   double _distanciaEmKm = 0.0;
   Veiculo? _veiculo;
   final service = FlutterBackgroundService();
-  final veiculoService = VeiculoService(); // Instancia o serviço aqui
+  final veiculoService = VeiculoService();
   bool _isTurnoAtivo = false;
   bool _isLoading = true;
+  StreamSubscription<Map<String, dynamic>?>? _serviceSubscription;
 
   @override
   void initState() {
@@ -35,8 +36,14 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
     _setup();
   }
 
+  @override
+  void dispose() {
+    _serviceSubscription?.cancel();
+    super.dispose();
+  }
+
   Future<void> _setup() async {
-    _veiculo = await veiculoService.getVeiculo(); // Usa a instância
+    _veiculo = await veiculoService.getVeiculo();
     bool isRunning = await service.isRunning();
     if (mounted) {
       setState(() {
@@ -50,7 +57,7 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
   }
 
   void _ouvirServico() {
-    service.on('update').listen((event) {
+    _serviceSubscription = service.on('update').listen((event) {
       if (mounted) {
         setState(() {
           _tempoFormatado = event!['tempo'] ?? '00:00:00';
@@ -63,14 +70,12 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
   Future<void> _iniciarServicoETurno() async {
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
-      // Correção de 'use_build_context_synchronously'
       if (!mounted) return;
       await showDialog(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Permissão de Localização'),
-          content: const Text(
-              "Para calcular sua distância corretamente, mesmo com o app fechado, o Turno Pago precisa de acesso à sua localização 'o tempo todo'.\n\nNa próxima tela, por favor, escolha a opção 'Permitir o tempo todo' se disponível, ou 'Permitir durante o uso do app' para continuarmos."),
+          content: const Text("Para calcular sua distância corretamente, mesmo com o app fechado, o Turno Pago precisa de acesso à sua localização 'o tempo todo'.\n\nNa próxima tela, por favor, escolha a opção 'Permitir o tempo todo' se disponível, ou 'Permitir durante o uso do app' para continuarmos."),
           actions: [
             TextButton(
               child: const Text('ENTENDI, CONTINUAR'),
@@ -79,31 +84,21 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
           ],
         ),
       );
-
       permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
         return;
       }
     }
-
     if (permission == LocationPermission.deniedForever) {
-      // Correção de 'use_build_context_synchronously'
       if (!mounted) return;
-      await _showSettingsDialog(
-          "A permissão de localização foi negada permanentemente. Para usar esta função, você precisa habilitá-la manualmente nas configurações.");
+      await _showSettingsDialog("A permissão de localização foi negada permanentemente. Para usar esta função, você precisa habilitá-la manualmente nas configurações.");
       return;
     }
-
     if (permission != LocationPermission.always) {
-      // Correção de 'use_build_context_synchronously'
       if (!mounted) return;
-      await _showSettingsDialog(
-          "A localização em segundo plano é essencial. Por favor, vá para as configurações e mude a permissão para 'Permitir o tempo todo'.");
+      await _showSettingsDialog("A localização em segundo plano é essencial. Por favor, vá para as configurações e mude a permissão para 'Permitir o tempo todo'.");
       return;
     }
-
-    // Correção de 'use_build_context_synchronously'
     if (!mounted) return;
     final confirmado = await showDialog<bool>(
       context: context,
@@ -131,17 +126,37 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
     }
   }
 
-  //... O resto da classe continua aqui, sem a função _iniciarServicoETurno duplicada.
+  Future<void> _showSettingsDialog(String message) async {
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Permissão Necessária'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            child: const Text('Cancelar'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          TextButton(
+            child: const Text('IR PARA CONFIGURAÇÕES'),
+            onPressed: () {
+              Geolocator.openAppSettings();
+              Navigator.of(context).pop();
+            },
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _cancelarTurno() async {
-    // Correção de 'use_build_context_synchronously'
     if (!mounted) return;
     final confirmado = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Cancelar Turno'),
-        content: const Text(
-            'Tem certeza que deseja cancelar o turno atual? Todos os dados serão perdidos.'),
+        content: const Text('Tem certeza que deseja cancelar o turno atual? Todos os dados serão perdidos.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -157,26 +172,23 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
     );
 
     if (confirmado == true) {
+      _serviceSubscription?.cancel();
       service.invoke('stopService');
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('turno_start_time');
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-            builder: (context) =>
-            const MainScreen(verificarTurnoAoIniciar: false)),
+        MaterialPageRoute(builder: (context) => const MainScreen(verificarTurnoAoIniciar: false)),
             (Route<dynamic> route) => false,
       );
     }
   }
 
+  // FUNÇÃO ATUALIZADA COM A LÓGICA DE SELEÇÃO DE TEXTO
   Future<void> _finalizarTurno() async {
-    final ganhosController = MoneyMaskedTextController(
-        leftSymbol: 'R\$ ', decimalSeparator: ',', thousandSeparator: '.');
-    final kmRodadoController =
-    TextEditingController(text: _distanciaEmKm.toStringAsFixed(2));
-    final kmAtualVeiculoController =
-    TextEditingController(text: _veiculo?.kmAtual.toString() ?? '0');
+    final ganhosController = MoneyMaskedTextController(leftSymbol: 'R\$ ', decimalSeparator: ',', thousandSeparator: '.');
+    final kmRodadoController = TextEditingController(text: _distanciaEmKm.toStringAsFixed(2));
+    final kmAtualVeiculoController = TextEditingController(text: _veiculo?.kmAtual.toString() ?? '0');
     final corridasController = TextEditingController();
     final precoCombustivelController = MoneyMaskedTextController(
         leftSymbol: 'R\$ ',
@@ -186,12 +198,29 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
 
     final formKey = GlobalKey<FormState>();
 
+    final ganhosFocus = FocusNode();
     final kmRodadoFocus = FocusNode();
     final kmAtualFocus = FocusNode();
     final corridasFocus = FocusNode();
     final combustivelFocus = FocusNode();
 
-    // Correção de 'use_build_context_synchronously'
+    // Função helper para adicionar o listener de seleção
+    void addSelectAllOnFocus(FocusNode focusNode, TextEditingController controller) {
+      focusNode.addListener(() {
+        if (focusNode.hasFocus) {
+          controller.selection = TextSelection(baseOffset: 0, extentOffset: controller.text.length);
+        }
+      });
+    }
+
+    // Adiciona o listener para cada campo
+    addSelectAllOnFocus(ganhosFocus, ganhosController);
+    addSelectAllOnFocus(kmRodadoFocus, kmRodadoController);
+    addSelectAllOnFocus(kmAtualFocus, kmAtualVeiculoController);
+    addSelectAllOnFocus(corridasFocus, corridasController);
+    addSelectAllOnFocus(combustivelFocus, precoCombustivelController);
+
+
     if (!mounted) return;
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -208,7 +237,6 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
             });
           }
         }
-
         return AlertDialog(
           title: const Text('Finalizar Turno'),
           content: SingleChildScrollView(
@@ -217,34 +245,26 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('Tempo de Trabalho: $_tempoFormatado',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text('Tempo de Trabalho: $_tempoFormatado', style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: ganhosController,
+                    focusNode: ganhosFocus, // Associa o nó de foco
                     autofocus: true,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                        labelText: 'Ganhos Totais do Turno'),
-                    validator: (v) =>
-                    ganhosController.numberValue <= 0 ? 'Insira um valor' : null,
+                    decoration: const InputDecoration(labelText: 'Ganhos Totais do Turno'),
+                    validator: (v) => ganhosController.numberValue <= 0 ? 'Insira um valor' : null,
                     textInputAction: TextInputAction.next,
-                    onEditingComplete: () =>
-                        FocusScope.of(context).requestFocus(kmRodadoFocus),
+                    onEditingComplete: () => FocusScope.of(context).requestFocus(kmRodadoFocus),
                   ),
                   TextFormField(
                     controller: kmRodadoController,
                     focusNode: kmRodadoFocus,
                     keyboardType: TextInputType.number,
-                    decoration:
-                    const InputDecoration(labelText: 'KM Rodados no Turno'),
-                    validator: (v) =>
-                    (double.tryParse(v ?? '0') ?? 0) <= 0
-                        ? 'Insira um valor'
-                        : null,
+                    decoration: const InputDecoration(labelText: 'KM Rodados no Turno'),
+                    validator: (v) => (double.tryParse(v ?? '0') ?? 0) <= 0 ? 'Insira um valor' : null,
                     textInputAction: TextInputAction.next,
-                    onEditingComplete: () =>
-                        FocusScope.of(context).requestFocus(kmAtualFocus),
+                    onEditingComplete: () => FocusScope.of(context).requestFocus(kmAtualFocus),
                   ),
                   TextFormField(
                     controller: kmAtualVeiculoController,
@@ -255,47 +275,30 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
                       hintText: 'Última KM: ${_veiculo?.kmAtual ?? 0}',
                     ),
                     validator: (v) {
-                      if (v == null || v.isEmpty) {
-                        return 'Campo obrigatório';
-                      }
+                      if (v == null || v.isEmpty) return 'Campo obrigatório';
                       final km = int.tryParse(v);
-                      if (km == null) {
-                        return 'Número inválido';
-                      }
-                      // Correção de 'curly_braces_in_flow_control_structures'
-                      if (km <= (_veiculo?.kmAtual ?? 0)) {
-                        return 'Deve ser maior que a última KM';
-                      }
+                      if (km == null) return 'Número inválido';
+                      if (km <= (_veiculo?.kmAtual ?? 0)) return 'Deve ser maior que a última KM';
                       return null;
                     },
                     textInputAction: TextInputAction.next,
-                    onEditingComplete: () =>
-                        FocusScope.of(context).requestFocus(corridasFocus),
+                    onEditingComplete: () => FocusScope.of(context).requestFocus(corridasFocus),
                   ),
                   TextFormField(
                     controller: corridasController,
                     focusNode: corridasFocus,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                        labelText: 'Quantidade de Corridas'),
-                    validator: (v) =>
-                    (int.tryParse(v ?? '0') ?? 0) <= 0
-                        ? 'Insira um valor'
-                        : null,
+                    decoration: const InputDecoration(labelText: 'Quantidade de Corridas'),
+                    validator: (v) => (int.tryParse(v ?? '0') ?? 0) <= 0 ? 'Insira um valor' : null,
                     textInputAction: TextInputAction.next,
-                    onEditingComplete: () =>
-                        FocusScope.of(context).requestFocus(combustivelFocus),
+                    onEditingComplete: () => FocusScope.of(context).requestFocus(combustivelFocus),
                   ),
                   TextFormField(
                     controller: precoCombustivelController,
                     focusNode: combustivelFocus,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                        labelText: 'Preço do Combustível (litro)'),
-                    validator: (v) =>
-                    precoCombustivelController.numberValue <= 0
-                        ? 'Insira um valor'
-                        : null,
+                    decoration: const InputDecoration(labelText: 'Preço do Combustível (litro)'),
+                    validator: (v) => precoCombustivelController.numberValue <= 0 ? 'Insira um valor' : null,
                     textInputAction: TextInputAction.done,
                     onEditingComplete: submitForm,
                   ),
@@ -317,28 +320,21 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
       },
     );
 
-    kmRodadoFocus.dispose();
-    kmAtualFocus.dispose();
-    corridasFocus.dispose();
-    combustivelFocus.dispose();
-
     if (result != null) {
+      _serviceSubscription?.cancel();
       await _salvarDados(result);
       service.invoke('stopService');
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('turno_start_time');
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-            builder: (context) =>
-            const MainScreen(verificarTurnoAoIniciar: false)),
+        MaterialPageRoute(builder: (context) => const MainScreen(verificarTurnoAoIniciar: false)),
             (Route<dynamic> route) => false,
       );
     }
   }
 
   Future<void> _salvarDados(Map<String, dynamic> dados) async {
-    // 1. Adiciona o novo Turno
     final novoTurno = Turno(
       id: const Uuid().v4(),
       data: DateTime.now(),
@@ -348,8 +344,6 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
       precoCombustivel: dados['precoCombustivel'],
     );
     await DadosService.adicionarTurno(novoTurno);
-
-    // 2. ATUALIZA APENAS A QUILOMETRAGEM, preservando o resto
     await veiculoService.atualizarKm(dados['kmAtual']);
   }
 
@@ -444,30 +438,6 @@ class _TurnoAtivoScreenState extends State<TurnoAtivoScreen> {
                 Text('INICIAR', style: TextStyle(fontSize: 20)),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _showSettingsDialog(String message) async {
-    if (!mounted) return;
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Permissão Necessária'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            child: const Text('Cancelar'),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          TextButton(
-            child: const Text('IR PARA CONFIGURAÇÕES'),
-            onPressed: () {
-              Geolocator.openAppSettings();
-              Navigator.of(context).pop();
-            },
           ),
         ],
       ),

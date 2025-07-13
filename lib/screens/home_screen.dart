@@ -7,7 +7,6 @@ import 'package:turno_pago/models/manutencao_item.dart';
 import 'package:turno_pago/models/turno.dart';
 import 'package:turno_pago/models/veiculo.dart';
 import 'package:turno_pago/screens/historico_turnos_screen.dart';
-import 'package:turno_pago/screens/manutencao_screen.dart';
 import 'package:turno_pago/utils/app_formatters.dart';
 import 'despesas_screen.dart';
 import 'turno_ativo_screen.dart';
@@ -136,12 +135,7 @@ class HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _abrirTelaManutencao() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const ManutencaoScreen()),
-    );
-  }
+  // A FUNÇÃO _abrirTelaManutencao FOI REMOVIDA
 
   @override
   Widget build(BuildContext context) {
@@ -149,13 +143,8 @@ class HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text("Resumo do Dia"),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.build_outlined),
-            onPressed: _abrirTelaManutencao,
-            tooltip: 'Manutenção',
-          ),
-        ],
+        // O BOTÃO DE MANUTENÇÃO FOI REMOVIDO DA LISTA DE actions
+        actions: const [],
       ),
       body: RefreshIndicator(
         onRefresh: () async => _recarregarDados(),
@@ -179,7 +168,6 @@ class HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.all(16.0),
               child: ListView(
                 children: [
-                  // LÓGICA ATUALIZADA: Mostra o card de aluguel apenas se for alugado
                   if (veiculo.tipoVeiculo == TipoVeiculo.alugado)
                     _buildControleAluguelCard(dados),
 
@@ -217,14 +205,18 @@ class HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // WIDGET CORRIGIDO para mostrar os KMs restantes
   Widget _buildControleAluguelCard(Map<String, dynamic> dados) {
     final Veiculo veiculo = dados['veiculo'];
     final double kmRestantes = dados['kmRestantesFranquia'];
 
-    // Mostra o card apenas se uma franquia de KM foi definida
-    if (veiculo.kmContratadoAluguel == null) {
-      return const SizedBox.shrink(); // Retorna um widget vazio se não houver franquia
+    int diasRestantes = 0;
+    if (veiculo.dataFimAluguel != null) {
+      diasRestantes = veiculo.dataFimAluguel!.difference(DateTime.now()).inDays;
+      if (diasRestantes < 0) diasRestantes = 0;
+    }
+
+    if (veiculo.dataFimAluguel == null) {
+      return const SizedBox.shrink();
     }
 
     return Card(
@@ -235,9 +227,11 @@ class HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Controle da Franquia', style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.blue.shade800)),
+            Text('Controle do Aluguel', style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.blue.shade800)),
             const Divider(height: 20),
-            _buildInfoRow('🛣️ KM Restantes:', AppFormatters.formatKm(kmRestantes)),
+            _buildInfoRow('🗓️ Dias Restantes:', '$diasRestantes dias'),
+            if (veiculo.kmContratadoAluguel != null)
+              _buildInfoRow('🛣️ KM Restantes da Franquia:', AppFormatters.formatKm(kmRestantes)),
           ],
         ),
       ),

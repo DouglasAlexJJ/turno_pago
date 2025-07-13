@@ -94,8 +94,8 @@ class ManutencaoScreenState extends State<ManutencaoScreen> {
       await DadosService.salvarManutencaoItem(itemAtualizado);
 
       if (_veiculo != null) {
-        await VeiculoService().salvarVeiculo(
-            _veiculo!.copyWith(kmAtual: kmAtual));
+        // CORREÇÃO: Usa a nova função segura para atualizar APENAS a KM
+        await VeiculoService().atualizarKm(kmAtual);
       }
       _carregarDados();
     }

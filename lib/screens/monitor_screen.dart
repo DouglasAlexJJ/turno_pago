@@ -36,7 +36,7 @@ class _MonitorScreenState extends State<MonitorScreen> {
   Future<Map<String, dynamic>> _processarDadosDoMonitor() async {
     final results = await Future.wait([
       DadosService.getTurnos(),
-      VeiculoService().getVeiculo(), // Chamada Corrigida
+      VeiculoService().getVeiculo(),
       DadosService.getManutencaoItens(),
       DadosService.getDespesas(),
     ]);
@@ -48,24 +48,42 @@ class _MonitorScreenState extends State<MonitorScreen> {
 
     double totalProvisaoManutencao = 0;
     double totalReservaEmergencia = 0;
-    final custoManutencaoPorKm = manutencaoData.fold(0.0, (soma, item) => soma + item.custoPorKm);
+    double totalProvisaoAluguel = 0;
 
-    for (final turno in todosOsTurnos) {
-      totalProvisaoManutencao += turno.kmRodados * custoManutencaoPorKm;
+    // Identifica os dias únicos em que houve trabalho
+    final diasTrabalhadosUnicos = todosOsTurnos.map((t) => DateFormat('yyyy-MM-dd').format(t.data)).toSet();
+
+    // Calcula a provisão de aluguel para os dias trabalhados
+    if (veiculoData.tipoVeiculo == TipoVeiculo.alugado) {
+      totalProvisaoAluguel = diasTrabalhadosUnicos.length * veiculoData.provisaoDiariaAluguel;
     }
 
-    final diasComTurnos = todosOsTurnos.map((t) => DateFormat('yyyy-MM-dd').format(t.data)).toSet().toList();
+    // Calcula a provisão de manutenção apenas para veículo próprio
+    if (veiculoData.tipoVeiculo == TipoVeiculo.proprio) {
+      final custoManutencaoPorKm = manutencaoData.fold(0.0, (soma, item) => soma + item.custoPorKm);
+      for (final turno in todosOsTurnos) {
+        totalProvisaoManutencao += turno.kmRodados * custoManutencaoPorKm;
+      }
+    }
 
-    for (final dia in diasComTurnos) {
+    // Lógica para calcular a reserva de emergência acumulada
+    for (final dia in diasTrabalhadosUnicos) {
       final turnosDoDia = todosOsTurnos.where((t) => DateFormat('yyyy-MM-dd').format(t.data) == dia);
       final despesasDoDia = todasAsDespesas.where((d) => DateFormat('yyyy-MM-dd').format(d.data) == dia);
 
       double ganhosBrutosDia = turnosDoDia.fold(0.0, (sum, t) => sum + t.ganhos);
-      double kmRodadosDia = turnosDoDia.fold(0.0, (sum, t) => sum + t.kmRodados);
-      double provisaoManutencaoDia = kmRodadosDia * custoManutencaoPorKm;
       double despesasDoDiaValor = despesasDoDia.fold(0.0, (sum, d) => sum + d.valor);
 
-      double lucroLiquidoDia = ganhosBrutosDia - despesasDoDiaValor - provisaoManutencaoDia;
+      double custoDoDia = despesasDoDiaValor;
+      if (veiculoData.tipoVeiculo == TipoVeiculo.proprio) {
+        final custoManutencaoPorKm = manutencaoData.fold(0.0, (soma, item) => soma + item.custoPorKm);
+        final kmDoDia = turnosDoDia.fold(0.0, (soma, t) => soma + t.kmRodados);
+        custoDoDia += kmDoDia * custoManutencaoPorKm;
+      } else {
+        custoDoDia += veiculoData.provisaoDiariaAluguel;
+      }
+
+      double lucroLiquidoDia = ganhosBrutosDia - custoDoDia;
 
       if (lucroLiquidoDia > 0) {
         totalReservaEmergencia += lucroLiquidoDia * (veiculoData.percentualReserva / 100);
@@ -82,6 +100,7 @@ class _MonitorScreenState extends State<MonitorScreen> {
       'veiculo': veiculoData,
       'itensManutencao': manutencaoData,
       'totalProvisaoManutencao': totalProvisaoManutencao,
+      'totalProvisaoAluguel': totalProvisaoAluguel,
       'totalReservaEmergencia': totalReservaEmergencia,
     };
   }
@@ -98,11 +117,13 @@ class _MonitorScreenState extends State<MonitorScreen> {
           if (snapshot.hasError) {
             return Center(child: Text('Erro: ${snapshot.error}'));
           }
-          if (!snapshot.hasData) {
-            return const Center(child: Text('Nenhum dado.'));
+          if (!snapshot.hasData || snapshot.data == null) {
+            return const Center(child: Text('Nenhum dado para exibir.'));
           }
 
           final dados = snapshot.data!;
+          final Veiculo veiculo = dados['veiculo'];
+
           return RefreshIndicator(
             onRefresh: () async => _carregarDados(),
             child: ListView(
@@ -110,8 +131,10 @@ class _MonitorScreenState extends State<MonitorScreen> {
               children: [
                 _buildCofrinhoCard(dados),
                 const SizedBox(height: 16),
-                _buildMonitorManutencaoCard(
-                    dados['veiculo'], dados['itensManutencao']),
+
+                if (veiculo.tipoVeiculo == TipoVeiculo.proprio)
+                  _buildMonitorManutencaoCard(
+                      dados['veiculo'], dados['itensManutencao']),
               ],
             ),
           );
@@ -121,9 +144,12 @@ class _MonitorScreenState extends State<MonitorScreen> {
   }
 
   Widget _buildCofrinhoCard(Map<String, dynamic> dados) {
+    final Veiculo veiculo = dados['veiculo'];
     final double totalManutencao = dados['totalProvisaoManutencao'];
+    final double totalAluguel = dados['totalProvisaoAluguel'];
     final double totalReserva = dados['totalReservaEmergencia'];
-    final double totalGuardado = totalManutencao + totalReserva;
+
+    final double totalGuardado = totalManutencao + totalAluguel + totalReserva;
 
     return Card(
       elevation: 4,
@@ -137,7 +163,13 @@ class _MonitorScreenState extends State<MonitorScreen> {
             const SizedBox(height: 4),
             Text('Total que você deveria ter guardado para o futuro.', style: Theme.of(context).textTheme.bodySmall),
             const Divider(height: 20),
-            _buildInfoRow('🛠️ Para Manutenção:', AppFormatters.formatCurrency(totalManutencao)),
+
+            if (veiculo.tipoVeiculo == TipoVeiculo.proprio)
+              _buildInfoRow('🛠️ Para Manutenção:', AppFormatters.formatCurrency(totalManutencao)),
+
+            if (veiculo.tipoVeiculo == TipoVeiculo.alugado)
+              _buildInfoRow('🔑 Para Aluguel:', AppFormatters.formatCurrency(totalAluguel)),
+
             _buildInfoRow('🚨 Para Reserva de Emergência:', AppFormatters.formatCurrency(totalReserva)),
             const Divider(height: 20),
             _buildInfoRow('💰 Total Guardado:', AppFormatters.formatCurrency(totalGuardado), isHighlight: true, highlightColor: Colors.blue.shade900),

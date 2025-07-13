@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:turno_pago/models/veiculo.dart';
 import 'package:turno_pago/services/veiculo_service.dart';
+
 import 'manutencao_screen.dart';
 
 class PrimeiroAcessoScreen extends StatefulWidget {
@@ -16,7 +17,41 @@ class _PrimeiroAcessoScreenState extends State<PrimeiroAcessoScreen> {
   final _formKey = GlobalKey<FormState>();
   final _consumoController = TextEditingController();
   final _kmAtualController = TextEditingController();
-  final _percentualReservaController = TextEditingController();
+  final _percentualReservaController = TextEditingController(text: '10');
+
+  // Nós de Foco
+  final _consumoFocus = FocusNode();
+  final _kmAtualFocus = FocusNode();
+  final _percentualReservaFocus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _adicionarListenersDeFoco();
+  }
+
+  @override
+  void dispose() {
+    // Limpa os nós de foco
+    _consumoFocus.dispose();
+    _kmAtualFocus.dispose();
+    _percentualReservaFocus.dispose();
+    super.dispose();
+  }
+
+  void _adicionarListenersDeFoco() {
+    void addSelectAllOnFocus(FocusNode focusNode, TextEditingController controller) {
+      focusNode.addListener(() {
+        if (focusNode.hasFocus) {
+          controller.selection = TextSelection(baseOffset: 0, extentOffset: controller.text.length);
+        }
+      });
+    }
+
+    addSelectAllOnFocus(_consumoFocus, _consumoController);
+    addSelectAllOnFocus(_kmAtualFocus, _kmAtualController);
+    addSelectAllOnFocus(_percentualReservaFocus, _percentualReservaController);
+  }
 
   Future<void> _salvarEContinuar() async {
     if (_formKey.currentState!.validate()) {
@@ -66,6 +101,7 @@ class _PrimeiroAcessoScreenState extends State<PrimeiroAcessoScreen> {
                 const SizedBox(height: 32),
                 TextFormField(
                   controller: _kmAtualController,
+                  focusNode: _kmAtualFocus,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(labelText: 'Quilometragem ATUAL do veículo (km)'),
                   validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null,
@@ -73,6 +109,7 @@ class _PrimeiroAcessoScreenState extends State<PrimeiroAcessoScreen> {
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _consumoController,
+                  focusNode: _kmAtualFocus,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(labelText: 'Consumo médio do veículo (km/l)'),
                   validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null,
@@ -80,6 +117,7 @@ class _PrimeiroAcessoScreenState extends State<PrimeiroAcessoScreen> {
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _percentualReservaController,
+                  focusNode: _kmAtualFocus,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(labelText: 'Lucro diário para Reserva de Emergência (%)', hintText: 'Ex: 10 para 10%'),
                   validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null,

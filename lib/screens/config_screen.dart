@@ -29,15 +29,63 @@ class ConfigScreenState extends State<ConfigScreen> {
   final _custoTotalAluguelController = MoneyMaskedTextController(
       leftSymbol: 'R\$ ', decimalSeparator: ',', thousandSeparator: '.');
   final _kmContratadoController = TextEditingController();
-  final _kmInicialAluguelController = TextEditingController(); // NOVO CONTROLADOR
+  final _kmInicialAluguelController = TextEditingController();
   DateTime? _dataFimAluguel;
 
   late TipoVeiculo _tipoVeiculoSelecionado;
+
+  // Nós de Foco
+  final _consumoFocus = FocusNode();
+  final _percentualReservaFocus = FocusNode();
+  final _kmAtualFocus = FocusNode();
+  final _custoTotalAluguelFocus = FocusNode();
+  final _kmContratadoFocus = FocusNode();
+  final _kmInicialAluguelFocus = FocusNode();
 
   @override
   void initState() {
     super.initState();
     _carregarDados();
+    _adicionarListenersDeFoco();
+  }
+
+  @override
+  void dispose() {
+    // Limpa os controladores
+    _consumoController.dispose();
+    _percentualReservaController.dispose();
+    _kmAtualController.dispose();
+    _custoTotalAluguelController.dispose();
+    _kmContratadoController.dispose();
+    _kmInicialAluguelController.dispose();
+    // Limpa os nós de foco
+    _consumoFocus.dispose();
+    _percentualReservaFocus.dispose();
+    _kmAtualFocus.dispose();
+    _custoTotalAluguelFocus.dispose();
+    _kmContratadoFocus.dispose();
+    _kmInicialAluguelFocus.dispose();
+    super.dispose();
+  }
+
+  void _adicionarListenersDeFoco() {
+    void addSelectAllOnFocus(FocusNode focusNode, TextEditingController controller) {
+      focusNode.addListener(() {
+        if (focusNode.hasFocus) {
+          // Adiciona um pequeno delay para garantir que o campo tenha focado antes de selecionar
+          Future.delayed(const Duration(milliseconds: 50), () {
+            controller.selection = TextSelection(baseOffset: 0, extentOffset: controller.text.length);
+          });
+        }
+      });
+    }
+
+    addSelectAllOnFocus(_consumoFocus, _consumoController);
+    addSelectAllOnFocus(_percentualReservaFocus, _percentualReservaController);
+    addSelectAllOnFocus(_kmAtualFocus, _kmAtualController);
+    addSelectAllOnFocus(_custoTotalAluguelFocus, _custoTotalAluguelController);
+    addSelectAllOnFocus(_kmContratadoFocus, _kmContratadoController);
+    addSelectAllOnFocus(_kmInicialAluguelFocus, _kmInicialAluguelController);
   }
 
   Future<void> _carregarDados() async {
@@ -53,7 +101,6 @@ class ConfigScreenState extends State<ConfigScreen> {
         _custoTotalAluguelController.updateValue(_veiculo.custoTotalAluguel ?? 0);
         _dataFimAluguel = _veiculo.dataFimAluguel;
         _kmContratadoController.text = _veiculo.kmContratadoAluguel?.toString() ?? '';
-        // Carrega o KM inicial no novo controlador
         _kmInicialAluguelController.text = _veiculo.kmInicialAluguel?.toString() ?? '';
         _isLoading = false;
       });
@@ -69,19 +116,23 @@ class ConfigScreenState extends State<ConfigScreen> {
         return;
       }
 
+      int? kmInicialAluguel;
+      if (_veiculo.tipoVeiculo == TipoVeiculo.proprio && _tipoVeiculoSelecionado == TipoVeiculo.alugado) {
+        kmInicialAluguel = int.tryParse(_kmAtualController.text) ?? 0;
+      } else {
+        kmInicialAluguel = int.tryParse(_kmInicialAluguelController.text) ?? _veiculo.kmInicialAluguel;
+      }
+
       final novoVeiculo = _veiculo.copyWith(
         consumoMedio: double.tryParse(_consumoController.text) ?? _veiculo.consumoMedio,
-        percentualReserva: _tipoVeiculoSelecionado == TipoVeiculo.proprio
-            ? (double.tryParse(_percentualReservaController.text) ?? _veiculo.percentualReserva)
-            : _veiculo.percentualReserva,
+        percentualReserva: double.tryParse(_percentualReservaController.text) ?? _veiculo.percentualReserva,
         kmAtual: int.tryParse(_kmAtualController.text) ?? _veiculo.kmAtual,
         tipoVeiculo: _tipoVeiculoSelecionado,
         custoTotalAluguel: _tipoVeiculoSelecionado == TipoVeiculo.alugado ? _custoTotalAluguelController.numberValue : null,
         dataFimAluguel: _tipoVeiculoSelecionado == TipoVeiculo.alugado ? _dataFimAluguel : null,
         dataInicioAluguel: _tipoVeiculoSelecionado == TipoVeiculo.alugado ? (_veiculo.dataInicioAluguel ?? DateTime.now()) : null,
         kmContratadoAluguel: _tipoVeiculoSelecionado == TipoVeiculo.alugado ? int.tryParse(_kmContratadoController.text) : null,
-        // Salva o KM inicial do aluguel a partir do novo campo
-        kmInicialAluguel: _tipoVeiculoSelecionado == TipoVeiculo.alugado ? int.tryParse(_kmInicialAluguelController.text) : null,
+        kmInicialAluguel: _tipoVeiculoSelecionado == TipoVeiculo.alugado ? kmInicialAluguel : null,
       );
 
       await VeiculoService().salvarVeiculo(novoVeiculo);
@@ -143,6 +194,7 @@ class ConfigScreenState extends State<ConfigScreen> {
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: _kmAtualController,
+                        focusNode: _kmAtualFocus,
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(labelText: 'Quilometragem ATUAL do Veículo (km)'),
                         validator: (v) => (v == null || v.isEmpty) ? 'Campo obrigatório' : null,
@@ -150,8 +202,17 @@ class ConfigScreenState extends State<ConfigScreen> {
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: _consumoController,
+                        focusNode: _consumoFocus,
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(labelText: 'Consumo médio (km/l)'),
+                        validator: (v) => (v == null || v.isEmpty) ? 'Campo obrigatório' : null,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _percentualReservaController,
+                        focusNode: _percentualReservaFocus,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'Reserva de Emergência (%)'),
                         validator: (v) => (v == null || v.isEmpty) ? 'Campo obrigatório' : null,
                       ),
                     ],
@@ -181,13 +242,6 @@ class ConfigScreenState extends State<ConfigScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TextFormField(
-          controller: _percentualReservaController,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'Reserva de Emergência (%)'),
-          validator: (v) => (v == null || v.isEmpty) ? 'Campo obrigatório' : null,
-        ),
-        const SizedBox(height: 20),
         Center(
           child: OutlinedButton.icon(
             icon: const Icon(Icons.build),
@@ -200,7 +254,6 @@ class ConfigScreenState extends State<ConfigScreen> {
     );
   }
 
-  // WIDGET ATUALIZADO COM OS NOVOS CAMPOS
   Widget _buildCamposAluguel() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -209,6 +262,7 @@ class ConfigScreenState extends State<ConfigScreen> {
         const SizedBox(height: 16),
         TextFormField(
           controller: _custoTotalAluguelController,
+          focusNode: _custoTotalAluguelFocus,
           keyboardType: TextInputType.number,
           decoration: const InputDecoration(labelText: 'Custo Total do Contrato (R\$)'),
           validator: (v) => _custoTotalAluguelController.numberValue <= 0 ? 'Insira um custo válido' : null,
@@ -232,13 +286,14 @@ class ConfigScreenState extends State<ConfigScreen> {
         const SizedBox(height: 16),
         TextFormField(
           controller: _kmContratadoController,
+          focusNode: _kmContratadoFocus,
           keyboardType: TextInputType.number,
           decoration: const InputDecoration(labelText: 'Franquia de KM do Pacote (Opcional)'),
         ),
         const SizedBox(height: 16),
-        // NOVO CAMPO ADICIONADO
         TextFormField(
           controller: _kmInicialAluguelController,
+          focusNode: _kmInicialAluguelFocus,
           keyboardType: TextInputType.number,
           decoration: const InputDecoration(labelText: 'KM Inicial do Contrato de Aluguel'),
           validator: (v) => (v == null || v.isEmpty) ? 'Campo obrigatório' : null,

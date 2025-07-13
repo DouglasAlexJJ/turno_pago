@@ -14,12 +14,12 @@ class VeiculoService {
     return _firestore.collection('users').doc(user.uid).collection('veiculo').doc('config');
   }
 
-  // Este método é para salvar o objeto COMPLETO (usado na configuração)
+  // Usado para salvar o objeto COMPLETO na configuração
   Future<void> salvarVeiculo(Veiculo veiculo) async {
     await _getVeiculoDocRef().set(veiculo.toMap());
   }
 
-  // NOVA FUNÇÃO: Atualiza apenas a quilometragem, de forma segura.
+  // MÉTODO SEGURO: Atualiza apenas a quilometragem
   Future<void> atualizarKm(int novaKm) async {
     await _getVeiculoDocRef().update({'kmAtual': novaKm});
   }
@@ -30,10 +30,9 @@ class VeiculoService {
       if (docSnapshot.exists && docSnapshot.data() != null) {
         return Veiculo.fromMap(docSnapshot.data() as Map<String, dynamic>);
       } else {
-        return Veiculo(); // Retorna um veículo padrão se não houver dados
+        return Veiculo();
       }
     } catch (e) {
-      // Em caso de erro (ex: usuário recém-criado sem dados), retorna um veículo padrão
       return Veiculo();
     }
   }
